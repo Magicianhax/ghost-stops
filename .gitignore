@@ -1,6 +1,9 @@
 .env
 .env.*
 !.env.example
+.keypair.json
+.session.json
+.executor-state.json
 node_modules/
 target/
 dist/
