@@ -14,6 +14,8 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@coral-xyz/anchor": "^0.32.1",
+    "@magicblock-labs/gum-sdk": "^3.0.10",
     "@solana/web3.js": "^1.98.4",
     "bs58": "^6.0.0",
     "dotenv": "^17.4.2"

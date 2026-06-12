@@ -23,10 +23,26 @@ Owner: `FsQNzKG2Mf7jrvGvRbqXFKoi8FoySUCiVsAoZgQ3NG6P` · Basket: `9Zu64drGZjYsPA
 4. Entry fee at 1.1x: $0.00; at 5x: $0.01 on $55 notional (~2bps). Borrow 0.00047%/h.
 5. Setup steps idempotence: fresh-owner detection via `owner()` works (`basketPubkey` null → run setup).
 
-## Probe B — session-key capability matrix
+## Probe B — session-key capability matrix ✅
 
-(pending)
+Session: `Fz7Nc2LeJxx6mTpUc3xWV5Pjk3vurizaN2LCrmHZifW5` (createSessionV2, 24h, 0.01 SOL top-up, base chain).
 
-## Probe C — devnet crank + oracle
+| Endpoint (session-signed, ER) | Result |
+|---|---|
+| open-position | **PASS** (1780ms) |
+| place-trigger-order (SL) | **PASS** (442ms) |
+| edit-trigger-order | **PASS** (438ms) |
+| cancel-trigger-order (orderId 0) | **PASS** (442ms) |
+| place-trigger-order (TP) | **PASS** (442ms) |
+| close-position | **PASS** (504ms) |
+| Flash keeper auto-execution | **INCONCLUSIVE** — mark never crossed the TP during the 120s window; irrelevant to our architecture (executor self-closes) |
 
-(pending)
+**Decision:** executor gets full session-key capability — open/trigger-CRUD/close all work without the wallet. Optional safety feature unlocked: maintain a native Flash SL as a trailing backstop (edit-trigger-order works session-signed) in case the executor dies.
+
+## Probe C — devnet crank + oracle ✅
+
+**Oracle (devnet ER, `ENYweb…4jPu`):** live, updates between 2s-apart reads, and matches Flash's mainnet mark to **0.0000%** (raw `6658154361` × 10⁻⁸ = $66.5815 == Flash $66.58154361). Layout confirmed: price i64-LE @ byte 73, exponent i32-LE @ byte 89 — **stored as +8 but means 10⁻⁸** (use −|exp| for display; on-chain logic compares raw i64s only).
+
+**Crank (devnet ER):** `ScheduleTask` (Magic program variant 6) accepted; **10/10 iterations executed at ~100ms cadence** (consecutive slots ~2 apart), every tx `ok`, **fee = 0, payer = the validator identity itself** (`MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57`). Crank-executor PDA: seeds `["crank-executor", payer]` under `Crank111…`.
+
+**Phase 0 conclusion: every architectural assumption is verified live. Build proceeds with no fallbacks needed.**
