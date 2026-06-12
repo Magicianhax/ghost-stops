@@ -1,0 +1,19 @@
+[toolchain]
+anchor_version = "0.32.1"
+
+[features]
+resolution = true
+skip-lint = false
+
+[programs.devnet]
+ghost_stops = "8RzFuFdxwWedBoug44zjWGgs4WhhcpLTmo8e1tZVpCBb"
+
+[registry]
+url = "https://api.apr.dev"
+
+[provider]
+cluster = "devnet"
+wallet = ".keypair.json"
+
+[scripts]
+test = "echo 'integration tests live in scripts/test-program.ts'"

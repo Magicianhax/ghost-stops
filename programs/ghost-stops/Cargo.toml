@@ -1,0 +1,22 @@
+[package]
+name = "ghost-stops"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "ghost_stops"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+idl-build = ["anchor-lang/idl-build"]
+
+[dependencies]
+anchor-lang = { version = "0.32.1", features = ["init-if-needed"] }
+ephemeral-rollups-sdk = { version = "0.11.2", features = ["anchor", "disable-realloc"] }
+magicblock-magic-program-api = { version = "0.3.1", default-features = false }
+bincode = "1.3"
