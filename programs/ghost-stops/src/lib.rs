@@ -130,9 +130,9 @@ pub mod ghost_stops {
             data: anchor_lang::InstructionData::data(&crate::instruction::Tick {}),
         };
         let ix_data = bincode::serialize(&MagicBlockInstruction::ScheduleTask(ScheduleTaskArgs {
-            task_id: args.task_id,
-            execution_interval_millis: args.interval_ms,
-            iterations: args.iterations,
+            task_id: args.task_id as i64,
+            execution_interval_millis: args.interval_ms as i64,
+            iterations: args.iterations as i64,
             instructions: vec![tick_ix],
         }))
         .map_err(|_| error!(GhostError::SerializeFailed))?;
