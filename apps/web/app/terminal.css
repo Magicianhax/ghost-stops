@@ -154,8 +154,10 @@
 .gs-terminal .act-pnl{ font-size:30px; font-weight:800; }
 .gs-terminal .act-cta-big{ font-size:24px; font-weight:800; display:flex; align-items:center; gap:12px; }
 /* compact trade bar — short side buttons + two small middle buttons */
-.gs-terminal .act--compact{ padding:0 22px; min-height:40px; border-radius:var(--r-lg); justify-content:center; }
-.gs-terminal .act--compact .big{ font-size:18px; font-weight:800; display:flex; align-items:center; gap:8px; }
+/* compact trade bar — short, fixed-width side buttons, centered as a cluster */
+.gs-terminal .actionzone--cluster{ justify-content:center; }
+.gs-terminal .act--compact{ flex:0 0 auto; min-width:140px; padding:0 22px; min-height:40px; border-radius:var(--r-lg); justify-content:center; }
+.gs-terminal .act--compact .big{ font-size:17px; font-weight:800; display:flex; align-items:center; gap:8px; }
 .gs-terminal .act--mid{ flex:0 0 auto; padding:0 16px; min-height:40px; border-radius:var(--r-lg); gap:7px; background:var(--panel-hi); color:var(--ink); font-family:var(--font-disp); font-weight:800; font-size:13px; }
 .gs-terminal .act-k{ font-size:12px; font-weight:700; opacity:.82; text-transform:uppercase; letter-spacing:.07em; font-family:var(--font-ui); }
 .gs-terminal .kbd{ font-family:var(--font-num); font-size:11px; padding:2px 7px; border-radius:6px; border:2px solid currentColor; opacity:.55; font-weight:700; }
@@ -295,6 +297,9 @@
   .gs-terminal .act-pnl{ font-size:22px; }
   .gs-terminal .act--reverse{ flex:0 0 96px; }
   .gs-terminal .act-cta-big{ font-size:18px; }
+  .gs-terminal .actionzone--cluster{ justify-content:stretch; }
+  .gs-terminal .act--compact{ flex:1; min-width:0; }
+  .gs-terminal .act--mid{ display:none; }
   .gs-terminal .terminal{ bottom:96px; }
   .gs-terminal .drawer{ width:100vw; }
   .gs-terminal .modal{ width:94vw; }

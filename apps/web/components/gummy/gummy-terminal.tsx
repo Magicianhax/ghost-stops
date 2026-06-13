@@ -309,16 +309,16 @@ function Inner() {
         )}
 
         {/* ── action zone ── */}
-        <div className="actionzone">
+        <div className={`actionzone${phase === "flat" ? " actionzone--cluster" : ""}`}>
           {phase === "connect" && <button className="act act--connect act-grow" onClick={() => setModal("wallet")}><span className="act-cta-big disp">Connect wallet</span></button>}
           {phase === "enable" && <button className="act act--enable act-grow" onClick={() => void runEnable()}><span className="act-cta-big disp">{enabling ? "Enabling…" : "Enable one-click trading"}</span></button>}
           {phase === "deposit" && <button className="act act--deposit act-grow" onClick={() => setModal("funds")}><span className="act-cta-big disp">Deposit USDC to start</span></button>}
           {phase === "flat" && (
             <>
-              <button className={`act act--short act-grow act--compact ${busySide === "SHORT" ? "flash-on" : ""}`} onClick={() => void openPosition("SHORT")} disabled={busySide !== null}><span className="big disp">{busySide === "SHORT" ? "Opening…" : <>SHORT <Icon name="down" size={22} /></>}</span></button>
+              <button className={`act act--short act--compact ${busySide === "SHORT" ? "flash-on" : ""}`} onClick={() => void openPosition("SHORT")} disabled={busySide !== null}><span className="big disp">{busySide === "SHORT" ? "Opening…" : <>SHORT <Icon name="down" size={20} /></>}</span></button>
               <button className="act act--mid" onClick={() => setDrawer("stops")}><Icon name="pulse" size={18} /> Stops{activeStops.length > 0 ? ` · ${activeStops.length}` : ""}</button>
               <button className="act act--mid" onClick={() => setDrawer("markets")}><Icon name="swap" size={18} /> Markets</button>
-              <button className={`act act--long act-grow act--compact ${busySide === "LONG" ? "flash-on" : ""}`} onClick={() => void openPosition("LONG")} disabled={busySide !== null}><span className="big disp">{busySide === "LONG" ? "Opening…" : <>LONG <Icon name="up" size={22} /></>}</span></button>
+              <button className={`act act--long act--compact ${busySide === "LONG" ? "flash-on" : ""}`} onClick={() => void openPosition("LONG")} disabled={busySide !== null}><span className="big disp">{busySide === "LONG" ? "Opening…" : <>LONG <Icon name="up" size={20} /></>}</span></button>
             </>
           )}
           {phase === "position" && position && (
