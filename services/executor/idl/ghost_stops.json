@@ -1,0 +1,751 @@
+{
+  "address": "8RzFuFdxwWedBoug44zjWGgs4WhhcpLTmo8e1tZVpCBb",
+  "metadata": {
+    "name": "ghost_stops",
+    "version": "0.1.0",
+    "spec": "0.1.0"
+  },
+  "instructions": [
+    {
+      "name": "cancel_order",
+      "docs": [
+        "Owner or executor cancels an active order (ER tx)."
+      ],
+      "discriminator": [
+        95,
+        129,
+        237,
+        240,
+        8,
+        49,
+        223,
+        132
+      ],
+      "accounts": [
+        {
+          "name": "signer",
+          "signer": true
+        },
+        {
+          "name": "order",
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "cancel_tick",
+      "docs": [
+        "Cancel a scheduled crank task (ER tx). Verified encoding: variant 7 + i64 task_id."
+      ],
+      "discriminator": [
+        59,
+        97,
+        65,
+        34,
+        160,
+        203,
+        9,
+        67
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "magic_program",
+          "address": "Magic11111111111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "task_id",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "create_order",
+      "docs": [
+        "Create an order PDA on the BASE layer (devnet). Delegation happens in",
+        "`delegate_order`; from then on all mutations run inside the ER."
+      ],
+      "discriminator": [
+        141,
+        54,
+        37,
+        207,
+        237,
+        210,
+        250,
+        215
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "order",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  114,
+                  100,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              },
+              {
+                "kind": "arg",
+                "path": "p.order_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "p",
+          "type": {
+            "defined": {
+              "name": "CreateOrderParams"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "delegate_order",
+      "docs": [
+        "Delegate the order PDA to the ER (BASE layer tx). Validator optionally",
+        "pinned via the `validator` account; all of one tx's writable accounts",
+        "must live on the same validator."
+      ],
+      "discriminator": [
+        143,
+        114,
+        202,
+        66,
+        87,
+        29,
+        38,
+        130
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "buffer_order",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "order"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                110,
+                104,
+                125,
+                14,
+                72,
+                138,
+                3,
+                245,
+                251,
+                92,
+                95,
+                89,
+                200,
+                120,
+                202,
+                249,
+                112,
+                155,
+                143,
+                161,
+                99,
+                214,
+                183,
+                10,
+                12,
+                168,
+                121,
+                180,
+                161,
+                22,
+                115,
+                202
+              ]
+            }
+          }
+        },
+        {
+          "name": "delegation_record_order",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  108,
+                  101,
+                  103,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "order"
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "delegation_program"
+            }
+          }
+        },
+        {
+          "name": "delegation_metadata_order",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  108,
+                  101,
+                  103,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110,
+                  45,
+                  109,
+                  101,
+                  116,
+                  97,
+                  100,
+                  97,
+                  116,
+                  97
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "order"
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "delegation_program"
+            }
+          }
+        },
+        {
+          "name": "order",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  114,
+                  100,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "owner"
+              },
+              {
+                "kind": "arg",
+                "path": "order_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "validator",
+          "optional": true
+        },
+        {
+          "name": "owner_program",
+          "address": "8RzFuFdxwWedBoug44zjWGgs4WhhcpLTmo8e1tZVpCBb"
+        },
+        {
+          "name": "delegation_program",
+          "address": "DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "owner",
+          "type": "pubkey"
+        },
+        {
+          "name": "order_id",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "mark_executed",
+      "docs": [
+        "Executor (or owner) reports the Flash fill outcome (ER tx)."
+      ],
+      "discriminator": [
+        48,
+        99,
+        75,
+        230,
+        190,
+        61,
+        49,
+        134
+      ],
+      "accounts": [
+        {
+          "name": "signer",
+          "signer": true
+        },
+        {
+          "name": "order",
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "success",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "process_undelegation",
+      "discriminator": [
+        196,
+        28,
+        41,
+        206,
+        48,
+        37,
+        51,
+        167
+      ],
+      "accounts": [
+        {
+          "name": "base_account",
+          "writable": true
+        },
+        {
+          "name": "buffer"
+        },
+        {
+          "name": "payer",
+          "writable": true
+        },
+        {
+          "name": "system_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "account_seeds",
+          "type": {
+            "vec": "bytes"
+          }
+        }
+      ]
+    },
+    {
+      "name": "schedule_tick",
+      "docs": [
+        "Schedule the validator crank that calls `tick` every `interval_ms`",
+        "inside the ER (send this tx to the ER). Re-scheduling the same task_id",
+        "replaces the task — that's the native amend primitive."
+      ],
+      "discriminator": [
+        197,
+        80,
+        214,
+        198,
+        209,
+        150,
+        211,
+        44
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "order",
+          "writable": true
+        },
+        {
+          "name": "price_feed"
+        },
+        {
+          "name": "magic_program",
+          "address": "Magic11111111111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "ScheduleTickArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "tick",
+      "docs": [
+        "The heartbeat. Permissionless BY DESIGN: its only inputs are the pinned",
+        "oracle feed and deterministic state transitions — extra calls are",
+        "harmless. The validator crank invokes this every N ms inside the ER."
+      ],
+      "discriminator": [
+        92,
+        79,
+        44,
+        8,
+        101,
+        80,
+        63,
+        15
+      ],
+      "accounts": [
+        {
+          "name": "order",
+          "writable": true
+        },
+        {
+          "name": "price_feed"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "undelegate_order",
+      "docs": [
+        "Commit final state to L1 and undelegate (ER tx) — the \"settle\" moment."
+      ],
+      "discriminator": [
+        121,
+        50,
+        42,
+        169,
+        169,
+        96,
+        6,
+        0
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "order",
+          "writable": true
+        },
+        {
+          "name": "magic_program",
+          "address": "Magic11111111111111111111111111111111111111"
+        },
+        {
+          "name": "magic_context",
+          "writable": true,
+          "address": "MagicContext1111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Order",
+      "discriminator": [
+        134,
+        173,
+        223,
+        185,
+        77,
+        86,
+        28,
+        51
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "NotActive",
+      "msg": "order is not active"
+    },
+    {
+      "code": 6001,
+      "name": "WrongFeed",
+      "msg": "wrong price feed for this order"
+    },
+    {
+      "code": 6002,
+      "name": "BadFeed",
+      "msg": "malformed price feed account"
+    },
+    {
+      "code": 6003,
+      "name": "BadKind",
+      "msg": "unknown order kind"
+    },
+    {
+      "code": 6004,
+      "name": "NotFired",
+      "msg": "order has not fired"
+    },
+    {
+      "code": 6005,
+      "name": "BadParams",
+      "msg": "invalid order parameters"
+    },
+    {
+      "code": 6006,
+      "name": "Unauthorized",
+      "msg": "signer is neither owner nor executor"
+    },
+    {
+      "code": 6007,
+      "name": "SerializeFailed",
+      "msg": "failed to serialize crank instruction"
+    }
+  ],
+  "types": [
+    {
+      "name": "CreateOrderParams",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "order_id",
+            "type": "u64"
+          },
+          {
+            "name": "kind",
+            "type": "u8"
+          },
+          {
+            "name": "market_symbol",
+            "type": {
+              "array": [
+                "u8",
+                8
+              ]
+            }
+          },
+          {
+            "name": "price_feed",
+            "type": "pubkey"
+          },
+          {
+            "name": "trailing_bps",
+            "type": "u16"
+          },
+          {
+            "name": "initial_price",
+            "type": "i64"
+          },
+          {
+            "name": "trigger_price",
+            "type": "i64"
+          },
+          {
+            "name": "trigger_above",
+            "type": "bool"
+          },
+          {
+            "name": "size_pct_bps",
+            "type": "u16"
+          },
+          {
+            "name": "oco_link",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "expiry",
+            "type": "i64"
+          },
+          {
+            "name": "is_long",
+            "type": "bool"
+          },
+          {
+            "name": "executor",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Order",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "executor",
+            "type": "pubkey"
+          },
+          {
+            "name": "order_id",
+            "type": "u64"
+          },
+          {
+            "name": "kind",
+            "type": "u8"
+          },
+          {
+            "name": "market_symbol",
+            "type": {
+              "array": [
+                "u8",
+                8
+              ]
+            }
+          },
+          {
+            "name": "price_feed",
+            "type": "pubkey"
+          },
+          {
+            "name": "trailing_bps",
+            "type": "u16"
+          },
+          {
+            "name": "high_water_mark",
+            "type": "i64"
+          },
+          {
+            "name": "trigger_price",
+            "type": "i64"
+          },
+          {
+            "name": "trigger_above",
+            "type": "bool"
+          },
+          {
+            "name": "size_pct_bps",
+            "type": "u16"
+          },
+          {
+            "name": "oco_link",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "expiry",
+            "type": "i64"
+          },
+          {
+            "name": "state",
+            "type": "u8"
+          },
+          {
+            "name": "fired_price",
+            "type": "i64"
+          },
+          {
+            "name": "is_long",
+            "type": "bool"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ScheduleTickArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "task_id",
+            "type": "u64"
+          },
+          {
+            "name": "interval_ms",
+            "type": "u64"
+          },
+          {
+            "name": "iterations",
+            "type": "u64"
+          }
+        ]
+      }
+    }
+  ]
+}
