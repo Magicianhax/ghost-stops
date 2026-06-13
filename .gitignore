@@ -13,3 +13,4 @@ test-ledger/
 *.log
 
 .playwright-mcp/
+.sessions.json

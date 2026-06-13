@@ -3,7 +3,7 @@
 // Crash-safe: order state lives on-chain; a restart re-reconciles. Idempotent:
 // every FIRED order is handled once via the on-disk inflight set + the
 // on-chain EXECUTED/FAILED transition.
-import { PublicKey } from "@solana/web3.js";
+import { Connection, Keypair, PublicKey } from "@solana/web3.js";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { loadConfig } from "./config.ts";
@@ -15,6 +15,11 @@ const cfg = loadConfig();
 const orders = new OrderClient(cfg.erRpc, cfg.baseRpc, cfg.executorKeypair);
 const sessions = new SessionStore(cfg.sessionsFile);
 const flash = new FlashExecutor();
+
+// Session authenticity constants (mainnet — where Flash + the Keysp program live).
+const SESSION_KEYS_PROGRAM = new PublicKey("KeyspM2ssCJbqUhQ4k7sveSiY4WjnYsrXkC8oDbwde5");
+const MAGIC_TRADE = new PublicKey("FTv2RxXarPfNta45HTTMVaGvjzsGg27FXJ3hEKWBhrzV");
+const mainnet = new Connection(process.env.FLASH_BASE_RPC ?? "https://api.mainnet-beta.solana.com", "confirmed");
 
 const log = (msg: string) => console.log(`[${new Date().toISOString()}] ${msg}`);
 
@@ -154,6 +159,31 @@ const server = createServer((req, res) => {
         if (!b.owner || !Array.isArray(b.secretKey) || !b.sessionToken || !b.validUntil) {
           return json(res, 400, { error: "owner, secretKey[], sessionToken, validUntil required" });
         }
+        // Authenticity check — a registration is accepted only if the session is
+        // REAL: the SessionTokenV2 PDA must derive from exactly (signer, owner)
+        // and must exist on mainnet, which requires the owner wallet's signature
+        // at creation. A spoofed owner therefore cannot register a session.
+        let signerPk: PublicKey;
+        try {
+          signerPk = Keypair.fromSecretKey(Uint8Array.from(b.secretKey)).publicKey;
+        } catch {
+          return json(res, 400, { error: "malformed secretKey" });
+        }
+        const expected = PublicKey.findProgramAddressSync(
+          [
+            new TextEncoder().encode("session_token_v2"),
+            MAGIC_TRADE.toBytes(),
+            signerPk.toBytes(),
+            new PublicKey(b.owner).toBytes(),
+          ],
+          SESSION_KEYS_PROGRAM
+        )[0];
+        if (expected.toBase58() !== b.sessionToken) {
+          return json(res, 403, { error: "sessionToken does not derive from this owner+signer" });
+        }
+        if (!(await mainnet.getAccountInfo(expected))) {
+          return json(res, 403, { error: "session token not found on-chain" });
+        }
         sessions.set(b.owner, b.secretKey, b.sessionToken, b.validUntil);
         log(`session registered for ${b.owner} (valid until ${new Date(b.validUntil * 1000).toISOString()})`);
         return json(res, 200, { ok: true });
@@ -197,6 +227,9 @@ const server = createServer((req, res) => {
         const acc = await orders.conn.getAccountInfo(new PublicKey(pda));
         if (!acc) return json(res, 404, { error: "order not found" });
         const order = orders.decode(new PublicKey(pda), acc.data as Buffer);
+        // Only manage orders of owners registered with this executor. Full
+        // per-request wallet auth (signed nonce) is listed in README limitations.
+        if (!sessions.get(order.owner)) return json(res, 403, { error: "unknown owner" });
         await orders.cancelOrder(pda);
         await orders.cancelTick(order.orderId).catch(() => undefined);
         log(`order cancelled via API: ${pda}`);

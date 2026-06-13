@@ -72,6 +72,7 @@ export class SessionStore {
       sessionToken: s.sessionToken,
       validUntil: s.validUntil,
     }));
-    writeFileSync(this.file, JSON.stringify(out));
+    // owner-only perms (no-op on Windows, effective on the Linux deploy)
+    writeFileSync(this.file, JSON.stringify(out), { mode: 0o600 });
   }
 }

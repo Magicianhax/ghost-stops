@@ -100,6 +100,7 @@ Engine unit tests (`vitest`): `npm test` — the TS state machine is an exact in
 - The browser hands the session key to *our own* executor over HTTPS so stops fire with the tab closed — production would mint the session against an executor-held signer (one extra co-sign round trip).
 - Trigger→fill ~1s is bounded by the off-chain hop, which MagicBlock's rules make unavoidable; it is still ~8× faster than Flash's native trigger keeper.
 - `flashapi.trade/v2` self-reports `env:"dev"`; client pinned to a vendored commit.
+- Executor control API: `/session` registrations are authenticated by on-chain session existence (a spoofed owner can't register — the SessionTokenV2 PDA requires the owner's wallet signature to exist), and state-changing routes only act on registered owners. Production would add per-request signed-nonce auth + locked-down CORS on top.
 
 ## Verified numbers (all on-chain, reproducible from `docs/research/probe-results.md`)
 
