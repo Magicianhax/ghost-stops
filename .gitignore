@@ -11,3 +11,5 @@ dist/
 research-tmp/
 test-ledger/
 *.log
+
+.playwright-mcp/
