@@ -52,8 +52,8 @@ export default function Sheet({
             open ? "scale-100 opacity-100" : "pointer-events-none scale-95 opacity-0"
           }`}
         >
-          <div className="flex items-center justify-between px-4 pb-1 pt-3">
-            <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-faint">{label}</span>
+          <div className="flex items-center justify-between border-b border-edge px-4 pb-2 pt-3">
+            <span className="font-display text-[11px] font-semibold uppercase tracking-[0.18em] text-dim">{label}</span>
             {!locked && (
               <button
                 onClick={onClose}
@@ -64,7 +64,7 @@ export default function Sheet({
               </button>
             )}
           </div>
-          <div className="max-h-[80dvh] overflow-y-auto px-4 pb-5 pt-1">
+          <div className="thin-scroll max-h-[80dvh] overflow-y-auto px-4 pb-5 pt-3">
             {children}
           </div>
         </div>

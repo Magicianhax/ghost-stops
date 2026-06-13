@@ -120,7 +120,7 @@ export default function TopBar({
         className="flex items-center gap-2.5 px-3 text-left transition-transform active:scale-[0.99]"
       >
         <Bolt className="h-3.5 w-3.5 text-accent" />
-        <span className="flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.1em] text-dim">
+        <span className="flex items-center gap-1 font-display text-[11px] font-semibold uppercase tracking-[0.16em] text-dim">
           {market}/USDC
           <Chevron className="h-2.5 w-2.5 text-faint" />
         </span>
@@ -258,9 +258,9 @@ export default function TopBar({
           <span className="flex items-center border-l border-edge px-2.5">
             <button
               onClick={onOpenWallet}
-              className="h-8 rounded-md bg-long px-3.5 text-xs font-bold text-bg transition-transform active:scale-[0.99]"
+              className="h-8 bg-long px-4 font-display text-[11px] font-semibold uppercase tracking-[0.16em] text-bg transition-transform active:scale-[0.99]"
             >
-              Connect Wallet
+              Connect
             </button>
           </span>
         )}

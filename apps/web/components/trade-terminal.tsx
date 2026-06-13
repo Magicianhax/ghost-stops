@@ -80,9 +80,9 @@ export default function TradeTerminal({
 
   return (
     <div
-      className={`absolute left-3 top-1/2 z-20 -translate-y-1/2 overflow-hidden rounded-[4px] border transition-all duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+      className={`absolute left-3 top-1/2 z-20 -translate-y-1/2 overflow-hidden border transition-all duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] ${
         expanded
-          ? "w-[19rem] border-edge2 bg-panel/90 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-[2px]"
+          ? "framed framed-mint w-[19rem] border-edge bg-panel/95 backdrop-blur-[2px]"
           : "w-auto border-edge bg-panel"
       }`}
     >
@@ -109,7 +109,7 @@ export default function TradeTerminal({
         <div className="p-3.5">
           {/* header: step title · collapse */}
           <div className="flex items-center gap-2">
-            <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-faint">
+            <span className="font-display text-[11px] font-semibold uppercase tracking-[0.2em] text-ink">
               {step === "size" ? `trade ${market}` : "set leverage"}
             </span>
             <span className="h-px flex-1 bg-edge" aria-hidden />
@@ -128,7 +128,7 @@ export default function TradeTerminal({
             <div className="mt-3">
               {/* the ER balance lives top-right of the field; tap = full amount */}
               <div className="mb-1.5 flex items-baseline justify-between">
-                <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-faint">amount</span>
+                <span className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-faint">amount</span>
                 <button
                   onClick={() => erUsd !== null && erUsd > 0 && set({ sizeUsd: String(Math.floor(erUsd * 100) / 100) })}
                   disabled={erUsd === null || erUsd <= 0}
@@ -155,7 +155,7 @@ export default function TradeTerminal({
               <button
                 onClick={advance}
                 disabled={sizeNum <= 0}
-                className="mt-2.5 h-9 w-full rounded-[3px] bg-long text-xs font-bold text-bg transition-transform active:scale-[0.99] disabled:opacity-30"
+                className="mt-2.5 h-9 w-full bg-long font-display text-[11px] font-semibold uppercase tracking-[0.18em] text-bg transition-transform active:scale-[0.99] disabled:opacity-30"
               >
                 Next — leverage
               </button>
@@ -187,7 +187,7 @@ export default function TradeTerminal({
               <button
                 onClick={finish}
                 disabled={levNum <= 0}
-                className="mt-3 h-9 w-full rounded-[3px] bg-long text-xs font-bold text-bg transition-transform active:scale-[0.99] disabled:opacity-30"
+                className="mt-3 h-9 w-full bg-long font-display text-[11px] font-semibold uppercase tracking-[0.18em] text-bg transition-transform active:scale-[0.99] disabled:opacity-30"
               >
                 Done — arm the taps
               </button>

@@ -11,12 +11,12 @@
 
 import { useEffect, useRef } from "react";
 
-const BG = "#0b0d0c";
-const GRID = "#141816";
-const LINE = "#34d399";
-const SHORT_LINE = "#f43f5e";
-const LABEL = "#46504b";
-const PILL_TEXT = "#07120d";
+const BG = "#08090c";
+const GRID = "#12151b";
+const LINE = "#2fe39b";
+const SHORT_LINE = "#ff4d62";
+const LABEL = "#454b57";
+const PILL_TEXT = "#04130c";
 
 const TOP_PAD = 76;   // keep the line clear of the floating top bar
 const BOTTOM_PAD = 128; // …and of the action zone
@@ -31,17 +31,6 @@ function niceStep(raw: number): number {
   const unit = raw / pow;
   const nice = unit >= 5 ? 10 : unit >= 2 ? 5 : unit >= 1 ? 2 : 1;
   return nice * pow;
-}
-
-function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
-  const rr = Math.min(r, h / 2, w / 2);
-  ctx.beginPath();
-  ctx.moveTo(x + rr, y);
-  ctx.arcTo(x + w, y, x + w, y + h, rr);
-  ctx.arcTo(x + w, y + h, x, y + h, rr);
-  ctx.arcTo(x, y + h, x, y, rr);
-  ctx.arcTo(x, y, x + w, y, rr);
-  ctx.closePath();
 }
 
 export default function PriceChart({
@@ -240,19 +229,14 @@ export default function PriceChart({
       // column, right-aligned to the screen edge (drawn after the labels so it
       // rides on top of them, never pushing them left). The bloxwap read.
       const text = `$${disp.toFixed(2)}`;
-      ctx.font = "600 11px ui-monospace, SFMono-Regular, Menlo, monospace";
+      ctx.font = "600 11px var(--font-plex-mono), ui-monospace, monospace";
       const tw = ctx.measureText(text).width;
       const pillH = 20;
       const pillW = tw + 16;
-      const pillX = w - pillW - 4; // right-anchored, overlaying the y-axis labels
+      const pillX = w - pillW; // right-anchored, flush to the edge — sharp tag
       const pillY = Math.min(Math.max(tipY - pillH / 2, 10), h - pillH - 10);
-      ctx.save();
-      ctx.shadowColor = "rgba(52, 211, 153, 0.25)";
-      ctx.shadowBlur = 4;
       ctx.fillStyle = lineColor;
-      roundRect(ctx, pillX, pillY, pillW, pillH, 4);
-      ctx.fill();
-      ctx.restore();
+      ctx.fillRect(pillX, pillY, pillW, pillH); // hard rectangle, no radius
       ctx.fillStyle = PILL_TEXT;
       ctx.textAlign = "center";
       ctx.fillText(text, pillX + pillW / 2, pillY + pillH / 2 + 0.5);

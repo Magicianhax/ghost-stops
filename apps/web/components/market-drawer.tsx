@@ -171,7 +171,7 @@ export default function MarketDrawer({
             </svg>
           </button>
         </div>
-        <div className="max-h-[calc(100dvh-3rem)] overflow-y-auto p-2">
+        <div className="thin-scroll max-h-[calc(100dvh-3rem)] overflow-y-auto p-2">
           {markets.map((m) => (
             <button
               key={m}
@@ -184,9 +184,9 @@ export default function MarketDrawer({
               }`}
             >
               <MarketIcon symbol={m} />
-              <span className="font-mono text-sm font-semibold tracking-[0.02em]">{m}/USDC</span>
+              <span className="font-display text-sm font-semibold uppercase tracking-[0.08em]">{m}/USDC</span>
               {m === active && (
-                <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-long">active</span>
+                <span className="font-display text-[9px] font-semibold uppercase tracking-[0.16em] text-long">active</span>
               )}
             </button>
           ))}

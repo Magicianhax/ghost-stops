@@ -1,19 +1,25 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// app/layout.tsx — root shell: dark canvas, system sans UI face with Space
-// Grotesk reserved for display moments, metadata. THE HARD PART: none — all
-// live logic is client-side (no DB, no server state); this file frames it in
-// green-tinted near-black and loads the display font.
-// GOTCHAS.md → (no API gotchas here) (../../GOTCHAS.md)
+// app/layout.tsx — root shell. Two distinctive faces load here: Chakra Petch
+// (squared, cut-corner technical display — the "hard edges" in the type itself)
+// for all chrome and labels, and IBM Plex Mono for every numeral. Cool
+// near-black canvas, no rounded corners anywhere (enforced in globals).
 // ─────────────────────────────────────────────────────────────────────────────
 
 import type { Metadata, Viewport } from "next";
-import { Space_Grotesk } from "next/font/google";
+import { Chakra_Petch, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
 
-const grotesk = Space_Grotesk({
+const chakra = Chakra_Petch({
   subsets: ["latin"],
-  weight: ["600", "700"],
-  variable: "--font-grotesk",
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-chakra",
+  display: "swap",
+});
+
+const plexMono = IBM_Plex_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-plex-mono",
   display: "swap",
 });
 
@@ -24,13 +30,13 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0b0d0c",
+  themeColor: "#08090c",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={grotesk.variable}>
-      <body className="min-h-[100dvh] bg-bg font-sans text-ink antialiased">
+    <html lang="en" className={`${chakra.variable} ${plexMono.variable}`}>
+      <body className="min-h-[100dvh] bg-bg font-mono text-ink antialiased">
         {children}
       </body>
     </html>

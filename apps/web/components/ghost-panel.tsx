@@ -40,22 +40,32 @@ const STATE_BADGE: Record<GhostOrder["state"], { text: string; cls: string }> = 
 const fmt = (rawPrice: number) =>
   `$${rawToUi(rawPrice).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 3 })}`;
 
-function OrderRow({ order, markUi }: { order: GhostOrder; markUi: number | null }) {
+function OrderRow({ order, markUi, idx }: { order: GhostOrder; markUi: number | null; idx: number }) {
   const ticks = useTickStats(order.state === "active" ? order.pda : null);
   const [cancelling, setCancelling] = useState(false);
   const badge = STATE_BADGE[order.state];
   const stop = ghostStopLevel(order);
+  const live = order.state === "active";
   const distancePct =
     markUi && markUi > 0 ? (Math.abs(markUi - rawToUi(stop)) / markUi) * 100 : null;
 
   return (
-    <div className="rounded-[3px] border border-edge bg-panel2 px-3 py-2.5">
+    <div className={live ? "framed framed-mint bg-panel2 px-3.5 py-3" : "border border-edge bg-panel2 px-3.5 py-2.5"}>
       <div className="flex items-center justify-between gap-2">
-        <span className="font-mono text-[11px] text-ink">
-          {order.market} {order.isLong ? "LONG" : "SHORT"}
-          {order.kind === "trailing" ? ` · trail ${(order.trailingBps / 100).toFixed(2)}%` : " · fixed"}
+        <span className="flex items-center gap-2">
+          <span className="font-mono text-[9px] tabular-nums text-faint">{String(idx + 1).padStart(2, "0")}</span>
+          <span className="font-display text-[11px] font-semibold uppercase tracking-[0.08em] text-ink">
+            {order.market} {order.isLong ? "LONG" : "SHORT"}
+          </span>
+          <span className="font-mono text-[10px] text-dim">
+            {order.kind === "trailing" ? `trail ${(order.trailingBps / 100).toFixed(2)}%` : "fixed"}
+          </span>
         </span>
-        <span className={`rounded border px-1.5 py-0.5 font-mono text-[9px] tracking-[0.08em] ${badge.cls}`}>
+        <span
+          className={`border px-1.5 py-0.5 font-display text-[9px] font-semibold tracking-[0.12em] ${badge.cls} ${
+            order.state === "fired" ? "spark" : ""
+          }`}
+        >
           {badge.text}
         </span>
       </div>
@@ -201,7 +211,7 @@ export default function GhostDrawer({
           </button>
         </div>
 
-        <div className="max-h-[calc(100dvh-3rem)] space-y-3 overflow-y-auto p-4">
+        <div className="thin-scroll max-h-[calc(100dvh-3rem)] space-y-3 overflow-y-auto p-4">
           <p className="font-mono text-[10px] leading-relaxed text-faint">
             on-chain trailing stops · evaluated every 100ms by the MagicBlock
             Ephemeral Rollup itself · zero fees · fills on Flash in ~1s
@@ -219,19 +229,20 @@ export default function GhostDrawer({
 
           {/* attach form — only when there's a live position to protect */}
           {position && session && registered && !positionProtected && (
-            <div className="rounded-[3px] border border-edge2 bg-panel2 p-3">
-              <div className="mb-2 font-mono text-[10px] text-dim">
-                protect {position.marketSymbol} {position.sideUi.toUpperCase()} (${position.sizeUsdUi})
+            <div className="framed bg-panel2 p-3.5">
+              <div className="mb-2.5 font-display text-[10px] font-semibold uppercase tracking-[0.14em] text-dim">
+                protect {position.marketSymbol} {position.sideUi.toUpperCase()}{" "}
+                <span className="text-faint">(${position.sizeUsdUi})</span>
               </div>
-              <div className="mb-2.5 flex gap-1">
+              <div className="mb-3 grid grid-cols-4 gap-px bg-edge">
                 {TRAIL_PRESETS.map((p) => (
                   <button
                     key={p.bps}
                     onClick={() => setTrailBps(p.bps)}
-                    className={`flex-1 rounded border px-1 py-1.5 font-mono text-[10px] transition-colors ${
+                    className={`py-2 font-mono text-[11px] tabular-nums transition-colors ${
                       trailBps === p.bps
-                        ? "border-long/60 bg-long/10 text-long"
-                        : "border-edge text-dim hover:border-edge2"
+                        ? "bg-long/15 text-long"
+                        : "bg-panel2 text-dim hover:text-ink"
                     }`}
                   >
                     {p.label}
@@ -241,7 +252,7 @@ export default function GhostDrawer({
               <button
                 onClick={() => void attach()}
                 disabled={attaching}
-                className="w-full rounded-[3px] border border-long/50 bg-long/15 py-2 font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-long transition-transform active:scale-[0.98] disabled:opacity-50"
+                className="w-full border border-long/50 bg-long/15 py-2.5 font-display text-[11px] font-semibold uppercase tracking-[0.16em] text-long transition-colors hover:bg-long/25 active:scale-[0.98] disabled:opacity-50"
               >
                 {attaching ? "attaching…" : `attach trailing stop ${(trailBps / 100).toFixed(1)}%`}
               </button>
@@ -258,18 +269,24 @@ export default function GhostDrawer({
           {error && <p className="break-all font-mono text-[10px] text-short">{error}</p>}
 
           {activeOrders.length > 0 && (
-            <div className="space-y-2">
-              <div className="font-mono text-[9px] uppercase tracking-[0.14em] text-faint">live</div>
-              {activeOrders.map((o) => (
-                <OrderRow key={o.pda} order={o} markUi={markUi} />
+            <div className="space-y-2.5">
+              <div className="flex items-center gap-2">
+                <span className="font-display text-[9px] font-semibold uppercase tracking-[0.2em] text-long">live</span>
+                <span className="h-px flex-1 bg-edge" aria-hidden />
+              </div>
+              {activeOrders.map((o, i) => (
+                <OrderRow key={o.pda} order={o} markUi={markUi} idx={i} />
               ))}
             </div>
           )}
           {doneOrders.length > 0 && (
-            <div className="space-y-2">
-              <div className="font-mono text-[9px] uppercase tracking-[0.14em] text-faint">history</div>
-              {doneOrders.map((o) => (
-                <OrderRow key={o.pda} order={o} markUi={markUi} />
+            <div className="space-y-2.5">
+              <div className="flex items-center gap-2">
+                <span className="font-display text-[9px] font-semibold uppercase tracking-[0.2em] text-faint">history</span>
+                <span className="h-px flex-1 bg-edge" aria-hidden />
+              </div>
+              {doneOrders.map((o, i) => (
+                <OrderRow key={o.pda} order={o} markUi={markUi} idx={i} />
               ))}
             </div>
           )}

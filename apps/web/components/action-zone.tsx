@@ -124,16 +124,16 @@ function PairButton({
       } ${disabled && !busy ? "opacity-35" : ""}`}
     >
       {busy ? (
-        <span className="soft-pulse font-mono text-[11px]">filling…</span>
+        <span className="soft-pulse font-mono text-[11px] uppercase tracking-[0.18em]">filling…</span>
       ) : (
         <>
-          <span className="flex items-center gap-1.5 font-mono text-[13px] font-bold tracking-[0.1em]">
+          <span className="flex items-center gap-2 font-display text-[16px] font-semibold tracking-[0.24em]">
             {long ? "LONG" : "SHORT"}
             <MarkIcon direction={long ? "up" : "down"} />
           </span>
-          <span className="flex items-center gap-1.5 font-mono text-[10px] text-dim">
+          <span className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.12em] text-dim">
             {configure ? (
-              "set size · tap to configure"
+              "set size · configure"
             ) : (
               <>
                 tap or press {kbdHint && <Kbd dir={kbdHint} />}
@@ -193,7 +193,7 @@ export default function ActionZone({
   // pair uses the full zone width intentionally (thumb-zone affordance for
   // both sides).
   const cta =
-    "h-12 w-full max-w-xs mx-auto rounded-md text-[13px] font-bold transition-transform active:scale-[0.99] sm:max-w-sm";
+    "h-12 w-full max-w-xs mx-auto font-display text-[13px] font-semibold uppercase tracking-[0.18em] transition-transform active:scale-[0.99] sm:max-w-sm";
 
   return (
     <div className="relative z-20 flex flex-col items-center gap-3 px-3 pb-[max(12px,env(safe-area-inset-bottom))] pt-1">
@@ -300,11 +300,11 @@ export default function ActionZone({
               <>
                 <span className="flex items-center gap-1.5">
                   <ReverseIcon className="h-4 w-4" />
-                  <span className="font-mono text-[11px] font-bold uppercase tracking-[0.08em]">
+                  <span className="font-display text-[12px] font-semibold uppercase tracking-[0.18em]">
                     {zone.side === "LONG" ? "short" : "long"}
                   </span>
                 </span>
-                <span className="font-mono text-[9px] uppercase tracking-[0.1em] text-faint">reverse</span>
+                <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-faint">reverse</span>
               </>
             )}
           </button>
@@ -321,7 +321,7 @@ export default function ActionZone({
             }`}
           >
             <span className="grid justify-items-center gap-0.5">
-              <span className="font-mono text-[13px] font-bold uppercase tracking-[0.1em]">
+              <span className="font-display text-[14px] font-semibold uppercase tracking-[0.22em]">
                 {busy === "flatten" || busy === "close-one" ? (
                   <span className="soft-pulse">closing…</span>
                 ) : (
