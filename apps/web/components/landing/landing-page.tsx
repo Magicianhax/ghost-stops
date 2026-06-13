@@ -12,16 +12,6 @@ import { flash } from "@/lib/flash";
 import { TokenLogo } from "@/components/token-logo";
 import "@/app/landing.css";
 
-function UsdcMark({ size = 16 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden style={{ display: "block" }}>
-      <circle cx="16" cy="16" r="16" fill="#2775CA" />
-      <path d="M20.5 18.6c0-2.4-1.45-3.23-4.35-3.58-2.07-.27-2.49-.82-2.49-1.78s.69-1.6 2.07-1.6c1.24 0 1.93.41 2.27 1.45a.52.52 0 0 0 .49.35h1.1a.48.48 0 0 0 .48-.5v-.06a3.43 3.43 0 0 0-3.04-2.81V8.9a.49.49 0 0 0-.48-.55h-1.04a.49.49 0 0 0-.48.55v1.15c-2.07.28-3.38 1.66-3.38 3.38 0 2.28 1.38 3.16 4.28 3.51 1.93.34 2.55.76 2.55 1.85s-.96 1.85-2.27 1.85c-1.79 0-2.41-.76-2.62-1.79a.5.5 0 0 0-.48-.41h-1.18a.48.48 0 0 0-.48.5v.05a3.6 3.6 0 0 0 3.45 3.09v1.16a.49.49 0 0 0 .48.55h1.04a.49.49 0 0 0 .48-.55v-1.16c2.07-.35 3.45-1.8 3.45-3.65Z" fill="#fff" />
-      <path d="M12.6 24.9c-5.38-1.93-8.14-7.93-6.14-13.24a10.2 10.2 0 0 1 6.14-6.14c.28-.14.42-.34.42-.69V3.86c0-.28-.14-.48-.42-.55-.07 0-.2 0-.28.07a13.1 13.1 0 0 0 0 24.65c.28.13.55 0 .62-.28.07-.07.07-.14.07-.28v-.96c0-.27-.2-.55-.41-.62Zm6.83-21.5c-.28-.14-.55 0-.62.27-.07.07-.07.14-.07.28v.96c0 .28.2.55.41.62 5.38 1.93 8.14 7.93 6.14 13.24a10.2 10.2 0 0 1-6.14 6.14c-.28.14-.42.34-.42.69v.96c0 .28.14.48.42.55.07 0 .2 0 .28-.07a13.1 13.1 0 0 0 0-24.65Z" fill="#fff" />
-    </svg>
-  );
-}
-
 function SolanaMark({ size = 18 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 398 312" aria-hidden style={{ display: "block" }}>
@@ -190,7 +180,6 @@ export default function LandingPage() {
             <span className="pill">{/* eslint-disable-next-line @next/next/no-img-element */}<img src="/brand/flash.png" alt="Flash Trade" style={{ height: 18, width: "auto", display: "block" }} /></span>
             <span className="pill">{/* eslint-disable-next-line @next/next/no-img-element */}<img src="/brand/magicblock.svg" alt="MagicBlock" style={{ height: 17, width: "auto", display: "block" }} /></span>
             <span className="pill"><SolanaMark size={15} />Solana</span>
-            <span className="pill"><UsdcMark size={16} />USDC settled</span>
           </div>
         </div>
       </section>
