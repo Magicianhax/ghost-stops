@@ -14,7 +14,9 @@ function overridesFromEnv(): Partial<NetworkConfig> {
   const cfg: Partial<NetworkConfig> = {};
   if (process.env.NEXT_PUBLIC_FLASH_API_BASE) cfg.apiBase = process.env.NEXT_PUBLIC_FLASH_API_BASE;
   if (process.env.NEXT_PUBLIC_ER_RPC) cfg.erRpc = process.env.NEXT_PUBLIC_ER_RPC;
-  if (process.env.NEXT_PUBLIC_BASE_RPC) cfg.baseRpc = process.env.NEXT_PUBLIC_BASE_RPC;
+  // Browser default: api.mainnet-beta.solana.com 403s browser-origin requests;
+  // PublicNode is keyless + CORS-enabled. Override with your own keyed RPC.
+  cfg.baseRpc = process.env.NEXT_PUBLIC_BASE_RPC ?? "https://solana-rpc.publicnode.com";
   return cfg;
 }
 
