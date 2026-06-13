@@ -513,6 +513,13 @@ function SettingsModal({ onClose, theme, setTheme, chartStyle, setChartStyle, de
       <div className="seg-tabs">{(["line", "candles"] as const).map((c) => <button key={c} className={`dtab ${chartStyle === c ? "on" : ""}`} onClick={() => setChartStyle(c)}>{c[0]!.toUpperCase() + c.slice(1)}</button>)}</div>
       <div className="section-label">Density</div>
       <div className="seg-tabs">{(["compact", "regular", "comfy"] as const).map((d) => <button key={d} className={`dtab ${density === d ? "on" : ""}`} onClick={() => setDensity(d)}>{d[0]!.toUpperCase() + d.slice(1)}</button>)}</div>
+      <div className="section-label">Built on</div>
+      <div className="row" style={{ gap: 16, flexWrap: "wrap", opacity: 0.9 }}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/brand/flash.png" alt="Flash Trade" style={{ height: 16, width: "auto" }} />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/brand/magicblock.svg" alt="MagicBlock" style={{ height: 15, width: "auto" }} />
+      </div>
     </ModalShell>
   );
 }

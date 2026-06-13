@@ -187,10 +187,10 @@ export default function LandingPage() {
         <div className="wrap">
           <div className="trust-in">
             <span>Built on</span>
+            <span className="pill">{/* eslint-disable-next-line @next/next/no-img-element */}<img src="/brand/flash.png" alt="Flash Trade" style={{ height: 18, width: "auto", display: "block" }} /></span>
+            <span className="pill">{/* eslint-disable-next-line @next/next/no-img-element */}<img src="/brand/magicblock.svg" alt="MagicBlock" style={{ height: 17, width: "auto", display: "block" }} /></span>
             <span className="pill"><SolanaMark size={15} />Solana</span>
             <span className="pill"><UsdcMark size={16} />USDC settled</span>
-            <span className="pill">Flash Trade V2</span>
-            <span className="pill">MagicBlock Ephemeral Rollup</span>
           </div>
         </div>
       </section>
