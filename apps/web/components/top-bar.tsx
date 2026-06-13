@@ -15,6 +15,7 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { useEffect, useRef, useState } from "react";
 import Sheet from "@/components/sheet";
 import RollingNumber from "@/components/rolling-number";
+import { GhostMark } from "@/components/ghost-mark";
 import { fmtMs, shortKey } from "@/lib/format";
 
 // ── inline SVG icons (the only place the bolt exists — never the character) ──
@@ -133,12 +134,12 @@ export default function TopBar({
           onClick={onOpenGhost}
           aria-label="ghost stops — open the on-chain stops drawer"
           title="Ghost Stops — on-chain trailing stops"
-          className="flex items-center gap-1.5 border-l border-edge px-3 font-mono text-[11px] text-ink transition-transform active:scale-[0.99]"
+          className="group flex items-center gap-1.5 border-l border-edge px-3 text-dim transition-colors hover:text-ink active:scale-[0.99]"
         >
-          <span aria-hidden>👻</span>
-          <span className="hidden text-[9px] uppercase tracking-[0.12em] text-dim sm:inline">stops</span>
+          <GhostMark className="h-3.5 w-3.5 transition-colors group-hover:text-long" />
+          <span className="hidden font-display text-[9px] font-semibold uppercase tracking-[0.16em] sm:inline">stops</span>
           {activeStops > 0 && (
-            <span className="rounded border border-long/40 bg-long/10 px-1 font-mono text-[10px] tabular-nums text-long">
+            <span className="border border-long/40 bg-long/10 px-1 font-mono text-[10px] tabular-nums text-long">
               {activeStops}
             </span>
           )}

@@ -157,7 +157,7 @@ export default function TradeTerminal({
                 disabled={sizeNum <= 0}
                 className="mt-2.5 h-9 w-full bg-long font-display text-[11px] font-semibold uppercase tracking-[0.18em] text-bg transition-transform active:scale-[0.99] disabled:opacity-30"
               >
-                Next — leverage
+                Set leverage
               </button>
             </div>
           ) : (
@@ -189,7 +189,7 @@ export default function TradeTerminal({
                 disabled={levNum <= 0}
                 className="mt-3 h-9 w-full bg-long font-display text-[11px] font-semibold uppercase tracking-[0.18em] text-bg transition-transform active:scale-[0.99] disabled:opacity-30"
               >
-                Done — arm the taps
+                Arm taps
               </button>
             </div>
           )}

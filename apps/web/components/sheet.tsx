@@ -57,10 +57,12 @@ export default function Sheet({
             {!locked && (
               <button
                 onClick={onClose}
-                aria-label="close"
-                className="rounded px-1.5 font-mono text-[12px] leading-none text-faint transition-colors hover:text-ink"
+                aria-label="Close dialog"
+                className="grid h-6 w-6 place-items-center border border-edge text-dim transition-colors hover:border-edge2 hover:text-ink"
               >
-                ✕
+                <svg viewBox="0 0 10 10" className="h-2.5 w-2.5" aria-hidden>
+                  <path d="M2 2 L8 8 M8 2 L2 8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                </svg>
               </button>
             )}
           </div>

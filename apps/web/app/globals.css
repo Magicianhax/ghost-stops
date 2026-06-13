@@ -46,6 +46,26 @@ body {
   border-radius: 0 !important;
 }
 
+/* Every interactive control reads as clickable. */
+button:not(:disabled),
+[role="button"]:not([aria-disabled="true"]),
+a[href],
+label[for],
+summary {
+  cursor: pointer;
+}
+
+/* Reduced motion: keep state legible (live dot stays solid, fired badge stays
+   lime) but drop choreography. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .soft-pulse, .spark { animation: none !important; }
+}
+
 ::selection {
   background: rgb(47 227 155 / 0.25);
   color: #04130c;

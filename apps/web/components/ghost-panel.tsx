@@ -20,6 +20,7 @@ import {
   useTickStats,
   type GhostOrder,
 } from "@/lib/ghost";
+import { GhostMark } from "@/components/ghost-mark";
 import type { LoadedSession } from "@/lib/session";
 
 const TRAIL_PRESETS = [
@@ -40,7 +41,7 @@ const STATE_BADGE: Record<GhostOrder["state"], { text: string; cls: string }> = 
 const fmt = (rawPrice: number) =>
   `$${rawToUi(rawPrice).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 3 })}`;
 
-function OrderRow({ order, markUi, idx }: { order: GhostOrder; markUi: number | null; idx: number }) {
+function OrderRow({ order, markUi }: { order: GhostOrder; markUi: number | null }) {
   const ticks = useTickStats(order.state === "active" ? order.pda : null);
   const [cancelling, setCancelling] = useState(false);
   const badge = STATE_BADGE[order.state];
@@ -52,8 +53,7 @@ function OrderRow({ order, markUi, idx }: { order: GhostOrder; markUi: number | 
   return (
     <div className={live ? "framed framed-mint bg-panel2 px-3.5 py-3" : "border border-edge bg-panel2 px-3.5 py-2.5"}>
       <div className="flex items-center justify-between gap-2">
-        <span className="flex items-center gap-2">
-          <span className="font-mono text-[9px] tabular-nums text-faint">{String(idx + 1).padStart(2, "0")}</span>
+        <span className="flex items-baseline gap-2">
           <span className="font-display text-[11px] font-semibold uppercase tracking-[0.08em] text-ink">
             {order.market} {order.isLong ? "LONG" : "SHORT"}
           </span>
@@ -199,11 +199,14 @@ export default function GhostDrawer({
         }`}
       >
         <div className="flex h-12 items-center justify-between border-b border-edge px-4">
-          <span className="font-display text-[14px] font-semibold text-ink">👻 Ghost Stops</span>
+          <span className="flex items-center gap-2 font-display text-[13px] font-semibold uppercase tracking-[0.1em] text-ink">
+            <GhostMark className="h-4 w-4 text-long" />
+            Ghost Stops
+          </span>
           <button
             onClick={onClose}
-            aria-label="close ghost stops"
-            className="grid h-6 w-6 place-items-center rounded-[3px] border border-edge text-dim transition-colors hover:border-edge2 hover:text-ink"
+            aria-label="Close panel"
+            className="grid h-6 w-6 place-items-center border border-edge text-dim transition-colors hover:border-edge2 hover:text-ink"
           >
             <svg viewBox="0 0 10 10" className="h-2.5 w-2.5" aria-hidden>
               <path d="M2 2 L8 8 M8 2 L2 8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
@@ -213,17 +216,19 @@ export default function GhostDrawer({
 
         <div className="thin-scroll max-h-[calc(100dvh-3rem)] space-y-3 overflow-y-auto p-4">
           <p className="font-mono text-[10px] leading-relaxed text-faint">
-            on-chain trailing stops · evaluated every 100ms by the MagicBlock
-            Ephemeral Rollup itself · zero fees · fills on Flash in ~1s
+            Trailing stops evaluated on-chain every 100ms by the MagicBlock Ephemeral
+            Rollup. Zero fees, fills on Flash in about a second.
           </p>
 
-          {!owner && <p className="font-mono text-[11px] text-dim">connect a wallet to begin</p>}
+          {!owner && <p className="font-mono text-[11px] text-dim">Connect a wallet to begin.</p>}
           {owner && !session && (
-            <p className="font-mono text-[11px] text-dim">enable one-click trading first — stops execute through your scoped session key</p>
+            <p className="font-mono text-[11px] text-dim">
+              Enable one-click trading first. Stops execute through your scoped session key.
+            </p>
           )}
           {session && !registered && (
             <p className="font-mono text-[11px] text-short">
-              executor unreachable — stops can&apos;t fire. Is the executor running?
+              Executor unreachable, so stops can&apos;t fire. Is the executor running?
             </p>
           )}
 
@@ -259,11 +264,19 @@ export default function GhostDrawer({
             </div>
           )}
 
-          {position && positionProtected && (
-            <p className="font-mono text-[11px] text-long">position protected ✓</p>
+          {position && positionProtected && activeOrders.length === 0 && (
+            <p className="font-mono text-[11px] text-long">Position protected.</p>
           )}
           {owner && session && registered && !position && activeOrders.length === 0 && (
-            <p className="font-mono text-[11px] text-faint">open a position to protect it</p>
+            <div className="framed bg-panel2 px-3.5 py-4">
+              <div className="mb-1.5 font-display text-[10px] font-semibold uppercase tracking-[0.16em] text-dim">
+                no positions yet
+              </div>
+              <p className="font-mono text-[10px] leading-relaxed text-faint">
+                Open a SHORT or LONG below, then return here to attach a trailing stop.
+                It trails the price on-chain and closes the position when it reverses.
+              </p>
+            </div>
           )}
 
           {error && <p className="break-all font-mono text-[10px] text-short">{error}</p>}
@@ -274,8 +287,8 @@ export default function GhostDrawer({
                 <span className="font-display text-[9px] font-semibold uppercase tracking-[0.2em] text-long">live</span>
                 <span className="h-px flex-1 bg-edge" aria-hidden />
               </div>
-              {activeOrders.map((o, i) => (
-                <OrderRow key={o.pda} order={o} markUi={markUi} idx={i} />
+              {activeOrders.map((o) => (
+                <OrderRow key={o.pda} order={o} markUi={markUi} />
               ))}
             </div>
           )}
@@ -285,8 +298,8 @@ export default function GhostDrawer({
                 <span className="font-display text-[9px] font-semibold uppercase tracking-[0.2em] text-faint">history</span>
                 <span className="h-px flex-1 bg-edge" aria-hidden />
               </div>
-              {doneOrders.map((o, i) => (
-                <OrderRow key={o.pda} order={o} markUi={markUi} idx={i} />
+              {doneOrders.map((o) => (
+                <OrderRow key={o.pda} order={o} markUi={markUi} />
               ))}
             </div>
           )}
