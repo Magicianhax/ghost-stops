@@ -163,13 +163,16 @@ export default function TradeTerminal({
           ) : (
             <div className="mt-3">
               {/* what you're about to trade, with the live fee */}
-              <div className="mb-3 flex items-baseline justify-between rounded-[3px] border border-edge bg-bg/60 px-3 py-2">
+              <div className="mb-3 flex items-center justify-between rounded-[3px] border border-edge bg-bg/60 px-3 py-2">
                 <button
                   onClick={() => setStep("size")}
                   title="edit amount"
-                  className="font-mono text-sm tabular-nums text-ink underline-offset-4 hover:underline"
+                  className="group flex items-center gap-1.5"
                 >
-                  ${template.sizeUsd || "0"}
+                  <span className="font-mono text-sm tabular-nums text-ink">${template.sizeUsd || "0"}</span>
+                  <span className="rounded border border-edge px-1.5 py-px font-mono text-[9px] uppercase tracking-[0.08em] text-dim transition-colors group-hover:border-long/50 group-hover:text-long">
+                    edit
+                  </span>
                 </button>
                 <span className="font-mono text-[10px] tabular-nums text-dim">
                   fee {feeUsd === null ? "—" : fmtUsd(feeUsd)}
