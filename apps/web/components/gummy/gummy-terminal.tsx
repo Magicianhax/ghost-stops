@@ -8,10 +8,8 @@
 
 "use client";
 
-import { PhantomWalletAdapter } from "@solana/wallet-adapter-phantom";
 import { ConnectionProvider, WalletProvider, useAnchorWallet, useWallet } from "@solana/wallet-adapter-react";
-import { SolflareWalletAdapter } from "@solana/wallet-adapter-solflare";
-import { WalletReadyState } from "@solana/wallet-adapter-base";
+import { WalletReadyState, type Adapter } from "@solana/wallet-adapter-base";
 import { FlashV2Error, type PositionMetrics, type TradeType } from "flash-v2";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Ghost, Icon } from "@/components/gummy/ghost";
@@ -43,7 +41,12 @@ function errMsg(e: unknown): string {
 }
 
 export default function GummyTerminal() {
-  const wallets = useMemo(() => [new PhantomWalletAdapter(), new SolflareWalletAdapter()], []);
+  // No explicit adapters: every modern Solana wallet (Phantom, Solflare,
+  // Backpack, OKX, Zerion) self-registers via the Wallet Standard and is
+  // discovered automatically. Passing explicit legacy adapters created a stale
+  // duplicate whose connect path Phantom no longer supports (it connected then
+  // immediately emitted WalletDisconnectedError).
+  const wallets = useMemo<Adapter[]>(() => [], []);
   return (
     <ConnectionProvider endpoint={flash.network.baseRpc}>
       <WalletProvider wallets={wallets} autoConnect={false}>
