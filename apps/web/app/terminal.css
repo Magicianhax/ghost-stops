@@ -258,7 +258,28 @@
 @media (prefers-reduced-motion: reduce){
   .gs-terminal .ghost-float, .gs-terminal .badge.live, .gs-terminal .conn-dot::after, .gs-terminal .st-fired{ animation:none; }
 }
-@media (max-width:720px){
-  .gs-terminal .terminal{ width:calc(100vw - 40px); }
-  .gs-terminal .seg--lat, .gs-terminal .lat-text{ display:none; }
+@media (max-width:760px){
+  .gs-terminal .seg--lat{ display:none; }
+  .gs-terminal .brand-name{ display:none; }
+  .gs-terminal .terminal{ left:14px; right:14px; width:auto; bottom:104px; }
+}
+@media (max-width:560px){
+  .gs-terminal .topbar{ top:12px; left:12px; right:12px; gap:8px; }
+  .gs-terminal .seg--brand{ padding:6px; }
+  .gs-terminal .seg-btn .seg-label{ display:none; }
+  .gs-terminal .seg--market{ padding:6px 10px; gap:8px; }
+  .gs-terminal .pair{ font-size:13px; } .gs-terminal .pair-px{ font-size:10px; }
+  .gs-terminal .bal-sub{ display:none; }
+  .gs-terminal .actionzone{ left:12px; right:12px; bottom:12px; gap:8px; }
+  .gs-terminal .act{ padding:14px 14px; border-radius:var(--r-lg); }
+  .gs-terminal .act-side{ min-height:64px; }
+  .gs-terminal .act-side .big{ font-size:23px; }
+  .gs-terminal .act-pnl{ font-size:22px; }
+  .gs-terminal .act--reverse{ flex:0 0 96px; }
+  .gs-terminal .act-cta-big{ font-size:18px; }
+  .gs-terminal .terminal{ bottom:96px; }
+  .gs-terminal .drawer{ width:100vw; }
+  .gs-terminal .modal{ width:94vw; }
+  .gs-terminal .price-tag{ font-size:18px; right:14px; }
+  .gs-terminal .notice{ width:calc(100vw - 24px); top:78px; }
 }

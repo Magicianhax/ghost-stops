@@ -15,6 +15,7 @@ import { WalletReadyState } from "@solana/wallet-adapter-base";
 import { FlashV2Error, type PositionMetrics, type TradeType } from "flash-v2";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Ghost, Icon } from "@/components/gummy/ghost";
+import { TokenLogo } from "@/components/token-logo";
 import { GummyChart } from "@/components/gummy/gummy-chart";
 import { OrderCard } from "@/components/gummy/order-card";
 import { enableOneClickTrading, type EnableState, type EnableWalletCtx } from "@/lib/enable";
@@ -260,7 +261,7 @@ function Inner() {
         <div className="topbar">
           <div className="seg seg--brand"><Ghost size={36} float /><span className="brand-name disp">Ghost Stops</span></div>
           <button className="seg seg--market" onClick={() => setDrawer("markets")}>
-            <span className="tk" style={{ background: "linear-gradient(135deg,#9945FF,#14F195)" }}>{market[0]}</span>
+            <span className="tk" style={{ background: "var(--panel-2)", overflow: "hidden", padding: 0 }}><TokenLogo symbol={market} size={28} /></span>
             <span className="market-meta"><span className="pair">{market}-PERP</span><span className={`pair-px num ${drift === "down" ? "dn" : ""}`}>{priceTxt} {drift === "down" ? "▼" : "▲"}</span></span>
             <span className="caret">▾</span>
           </button>
@@ -372,7 +373,7 @@ function Inner() {
             <div className="drawer-body">
               {markets.map((m) => (
                 <button key={m} className={`market-row ${m === market ? "on" : ""}`} onClick={() => { setMarket(m); setDrawer(null); }}>
-                  <span className="tk" style={{ background: "linear-gradient(135deg,#9945FF,#14F195)", width: 30, height: 30, fontSize: 13 }}>{m[0]}</span>
+                  <span className="tk" style={{ background: "var(--panel-2)", overflow: "hidden", padding: 0, width: 32, height: 32 }}><TokenLogo symbol={m} size={30} /></span>
                   <span><div className="mr-name">{m}-PERP</div><div className="mr-sym">{m}/USDC</div></span>
                   {m === market && <span className="mr-px"><span className="up" style={{ fontWeight: 800, fontSize: 12 }}>active</span></span>}
                 </button>

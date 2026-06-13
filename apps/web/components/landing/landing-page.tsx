@@ -8,7 +8,30 @@
 
 import Link from "next/link";
 import { useEffect } from "react";
+import { flash } from "@/lib/flash";
+import { TokenLogo } from "@/components/token-logo";
 import "@/app/landing.css";
+
+function UsdcMark({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden style={{ display: "block" }}>
+      <circle cx="16" cy="16" r="16" fill="#2775CA" />
+      <path d="M20.5 18.6c0-2.4-1.45-3.23-4.35-3.58-2.07-.27-2.49-.82-2.49-1.78s.69-1.6 2.07-1.6c1.24 0 1.93.41 2.27 1.45a.52.52 0 0 0 .49.35h1.1a.48.48 0 0 0 .48-.5v-.06a3.43 3.43 0 0 0-3.04-2.81V8.9a.49.49 0 0 0-.48-.55h-1.04a.49.49 0 0 0-.48.55v1.15c-2.07.28-3.38 1.66-3.38 3.38 0 2.28 1.38 3.16 4.28 3.51 1.93.34 2.55.76 2.55 1.85s-.96 1.85-2.27 1.85c-1.79 0-2.41-.76-2.62-1.79a.5.5 0 0 0-.48-.41h-1.18a.48.48 0 0 0-.48.5v.05a3.6 3.6 0 0 0 3.45 3.09v1.16a.49.49 0 0 0 .48.55h1.04a.49.49 0 0 0 .48-.55v-1.16c2.07-.35 3.45-1.8 3.45-3.65Z" fill="#fff" />
+      <path d="M12.6 24.9c-5.38-1.93-8.14-7.93-6.14-13.24a10.2 10.2 0 0 1 6.14-6.14c.28-.14.42-.34.42-.69V3.86c0-.28-.14-.48-.42-.55-.07 0-.2 0-.28.07a13.1 13.1 0 0 0 0 24.65c.28.13.55 0 .62-.28.07-.07.07-.14.07-.28v-.96c0-.27-.2-.55-.41-.62Zm6.83-21.5c-.28-.14-.55 0-.62.27-.07.07-.07.14-.07.28v.96c0 .28.2.55.41.62 5.38 1.93 8.14 7.93 6.14 13.24a10.2 10.2 0 0 1-6.14 6.14c-.28.14-.42.34-.42.69v.96c0 .28.14.48.42.55.07 0 .2 0 .28-.07a13.1 13.1 0 0 0 0-24.65Z" fill="#fff" />
+    </svg>
+  );
+}
+
+function SolanaMark({ size = 18 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 398 312" aria-hidden style={{ display: "block" }}>
+      <defs><linearGradient id="solg" x1="360" y1="-37" x2="141" y2="383" gradientUnits="userSpaceOnUse"><stop offset="0" stopColor="#00FFA3" /><stop offset="1" stopColor="#DC1FFF" /></linearGradient></defs>
+      <path fill="url(#solg)" d="M64 237a13 13 0 0 1 9-4h317c6 0 9 7 5 11l-63 63a13 13 0 0 1-9 4H6c-6 0-9-7-5-11l63-63Z" />
+      <path fill="url(#solg)" d="M64 1a13 13 0 0 1 9-4h317c6 0 9 7 5 11l-63 63a13 13 0 0 1-9 4H6c-6 0-9-7-5-11L64 1Z" />
+      <path fill="url(#solg)" d="M334 118a13 13 0 0 0-9-4H8c-6 0-9 7-5 11l63 63a13 13 0 0 0 9 4h317c6 0 9-7 5-11l-63-63Z" />
+    </svg>
+  );
+}
 
 function Ghost({ size = 32, accent = false, cheeks = true, className = "" }: { size?: number; accent?: boolean; cheeks?: boolean; className?: string }) {
   return (
@@ -23,35 +46,26 @@ function Ghost({ size = 32, accent = false, cheeks = true, className = "" }: { s
 }
 
 export default function LandingPage() {
+  // Hero chart driven by the REAL live SOL price (Flash Trade's Pyth Lazer
+  // oracle), with a trailing stop ratcheting off the real highs. No mock walk:
+  // the line, PnL, and stop all move with the actual market.
   useEffect(() => {
     const byId = (id: string) => document.getElementById(id);
     const priceP = byId("hcPricePath");
     if (!priceP) return;
     const areaP = byId("hcAreaPath"), stopL = byId("hcStop"), entryL = byId("hcEntry"),
-      dot = byId("hcDot"), peak = byId("hcPeak"), pxEl = byId("hcPx"), pnlEl = byId("hcPnl"),
+      dot = byId("hcDot"), peak = byId("hcPeak"), pairEl = byId("hcPair"), pxEl = byId("hcPx"), pnlEl = byId("hcPnl"),
       flag = byId("hcStopFlag"), evalsEl = byId("hcEvals");
-
-    const W = 600, H = 180, N = 46, entry = 176.1, NOTIONAL = 5000;
-    let price = 183.0, t = 0, evals = 4182;
+    const W = 600, H = 180, N = 46, NOTIONAL = 5000;
+    let entry = 0, price = 0, evals = 0, stopVal = 0;
     const pts: number[] = [];
-    for (let i = 0; i < N; i++) pts.push(entry + 2 + (Math.random() - 0.4) * 5);
-    pts[N - 1] = price;
-    let stopVal = Math.max(...pts) * 0.985;
-    const reduce = typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+    let dead = false;
 
-    function draw() {
-      t += 1;
-      const center = entry * 1.04 + entry * 0.012 * Math.sin(t * 0.045);
-      price += (center - price) * 0.09 + (Math.random() - 0.5) * 0.95;
-      pts.push(price); if (pts.length > N) pts.shift();
+    const render = () => {
+      if (pts.length < 2) return;
       const wpeak = Math.max(...pts);
-      const target = wpeak * 0.985;
-      if (target > stopVal) stopVal = target;
-      else if (stopVal > target + entry * 0.004) stopVal -= entry * 0.0007;
-      evals += 3 + Math.floor(Math.random() * 5);
-      let lo = Math.min(...pts), hi = Math.max(...pts);
-      lo = Math.min(lo, stopVal, entry);
-      const pad = (hi - lo) * 0.28 + 0.5; lo -= pad; hi += pad * 1.05;
+      let lo = Math.min(...pts, stopVal, entry || pts[0]!), hi = Math.max(...pts);
+      const pad = (hi - lo) * 0.28 + Math.max(hi * 0.001, 0.01); lo -= pad; hi += pad * 1.05;
       const Y = (v: number) => (1 - (v - lo) / (hi - lo)) * H;
       const X = (i: number) => 10 + (i / (N - 1)) * (W - 20);
       let d = ""; const n = pts.length;
@@ -62,16 +76,29 @@ export default function LandingPage() {
       const ey = Y(entry); entryL?.setAttribute("y1", ey.toFixed(1)); entryL?.setAttribute("y2", ey.toFixed(1));
       dot?.setAttribute("cx", X(n - 1).toFixed(1)); dot?.setAttribute("cy", Y(price).toFixed(1));
       const pi = pts.indexOf(wpeak); peak?.setAttribute("cx", X(pi).toFixed(1)); peak?.setAttribute("cy", Y(wpeak).toFixed(1));
-      const qty = NOTIONAL / entry, pnlV = qty * (price - entry);
-      if (pxEl) pxEl.textContent = price.toFixed(2) + " ▲";
+      const pnlV = (NOTIONAL / entry) * (price - entry);
+      if (pxEl) pxEl.textContent = price.toFixed(2) + (pnlV >= 0 ? " ▲" : " ▼");
       if (pnlEl) pnlEl.textContent = (pnlV >= 0 ? "+" : "−") + "$" + Math.abs(pnlV).toFixed(2);
       if (flag) { flag.textContent = "stop " + stopVal.toFixed(2); (flag as HTMLElement).style.top = ((sy * 178) / H).toFixed(1) + "px"; }
       if (evalsEl) evalsEl.textContent = "evals " + evals.toLocaleString() + "×";
-    }
-    draw();
-    if (reduce) return;
-    const timer = setInterval(draw, 150);
-    return () => clearInterval(timer);
+    };
+
+    const poll = async () => {
+      try {
+        const p = await flash.price("SOL");
+        if (dead) return;
+        price = p.priceUi;
+        if (entry === 0) { entry = price * 0.985; for (let i = 0; i < N; i++) pts.push(price); stopVal = price * 0.985; if (pairEl) pairEl.textContent = "SOL-PERP"; }
+        pts.push(price); if (pts.length > N) pts.shift();
+        const target = Math.max(...pts) * 0.985; // 1.5% trail off the real peak
+        if (target > stopVal) stopVal = target;
+        evals += 10; // ~10 on-chain evaluations/second
+        render();
+      } catch { /* keep last; next poll retries */ }
+    };
+    void poll();
+    const timer = setInterval(poll, 1000);
+    return () => { dead = true; clearInterval(timer); };
   }, []);
 
   return (
@@ -125,9 +152,9 @@ export default function LandingPage() {
                 <circle className="gh-cheek" cx="31" cy="62" r="4.2" /><circle className="gh-cheek" cx="69" cy="62" r="4.2" />
               </svg>
               <div className="hc-top">
-                <span className="hc-tk">S</span>
-                <span><div className="hc-pair">SOL-PERP</div><div className="hc-px num" id="hcPx">182.40 ▲</div></span>
-                <span className="hc-tag" id="hcPnl">+$214.30</span>
+                <span className="hc-tk" style={{ overflow: "hidden", background: "var(--panel-2)", padding: 0 }}><TokenLogo symbol="SOL" size={30} /></span>
+                <span><div className="hc-pair" id="hcPair">SOL-PERP</div><div className="hc-px num" id="hcPx">live · Pyth Lazer</div></span>
+                <span className="hc-tag" id="hcPnl">—</span>
               </div>
               <div className="hc-chart">
                 <svg viewBox="0 0 600 180" preserveAspectRatio="none" width="100%" height="178">
@@ -160,10 +187,10 @@ export default function LandingPage() {
         <div className="wrap">
           <div className="trust-in">
             <span>Built on</span>
+            <span className="pill"><SolanaMark size={15} />Solana</span>
+            <span className="pill"><UsdcMark size={16} />USDC settled</span>
             <span className="pill">Flash Trade V2</span>
-            <span className="pill">Solana</span>
             <span className="pill">MagicBlock Ephemeral Rollup</span>
-            <span className="pill">USDC settled</span>
           </div>
         </div>
       </section>

@@ -100,7 +100,7 @@
 /* trust strip */
 .gs-landing .trust{ padding:8px 0 48px; }
 .gs-landing .trust-in{ display:flex; align-items:center; justify-content:center; gap:14px; flex-wrap:wrap; color:var(--faint); font-weight:800; font-size:14px; }
-.gs-landing .trust .pill{ background:var(--panel); border:2px solid var(--outline-soft); border-radius:var(--r-pill); padding:8px 16px; color:var(--muted); }
+.gs-landing .trust .pill{ display:inline-flex; align-items:center; gap:7px; background:var(--panel); border:2px solid var(--outline-soft); border-radius:var(--r-pill); padding:8px 16px; color:var(--muted); }
 
 /* section heading */
 .gs-landing .sec{ padding:56px 0; }
@@ -155,6 +155,19 @@
   .gs-landing .hero-grid{ grid-template-columns:1fr; } .gs-landing .feat-grid{ grid-template-columns:1fr; }
   .gs-landing .steps{ grid-template-columns:1fr; } .gs-landing .trail-card{ grid-template-columns:1fr; }
   .gs-landing .nav-links{ display:none; }
+}
+@media (max-width:560px){
+  .gs-landing .wrap{ padding:0 16px; }
+  .gs-landing .hero{ padding:36px 0 24px; }
+  .gs-landing h1{ font-size:clamp(28px,8vw,40px); }
+  .gs-landing .lead{ font-size:16px; }
+  .gs-landing .hero-cta{ flex-direction:column; align-items:stretch; }
+  .gs-landing .hero-cta .btn{ justify-content:center; }
+  .gs-landing .sec{ padding:40px 0; }
+  .gs-landing .cta-card{ padding:44px 22px; }
+  .gs-landing .nav-cta .btn{ padding:11px 16px; font-size:14px; }
+  .gs-landing .trust-in{ gap:10px; font-size:12px; }
+  .gs-landing .trust .pill{ padding:7px 12px; font-size:12px; }
 }
 @media (prefers-reduced-motion: reduce){
   .gs-landing .float, .gs-landing .float2{ animation:none; }
