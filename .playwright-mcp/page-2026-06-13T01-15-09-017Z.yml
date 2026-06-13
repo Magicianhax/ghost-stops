@@ -1,0 +1,127 @@
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - main "live SOL price chart" [ref=e4]:
+      - generic [ref=e8]: connecting to Pyth Lazer…
+    - banner [ref=e9]:
+      - button "SOL/USDC — select trading pair" [ref=e10]:
+        - img [ref=e11]
+        - generic [ref=e13]:
+          - text: SOL/USDC
+          - img [ref=e14]
+        - generic [ref=e16]: $—
+      - generic [ref=e17]:
+        - button "connection status — open session latency log" [ref=e18]:
+          - generic [ref=e19]: — ms
+          - generic [ref=e21]: connecting
+        - button "Connect Wallet" [ref=e23]
+    - generic [ref=e26]:
+      - button "sell short (down)" [ref=e27]:
+        - generic [ref=e28]:
+          - text: SHORT
+          - img [ref=e29]
+        - generic [ref=e31]: tap or press
+      - button "buy long (up)" [ref=e32]:
+        - generic [ref=e33]:
+          - text: LONG
+          - img [ref=e34]
+        - generic [ref=e36]: tap or press
+    - generic [ref=e38]:
+      - generic [ref=e39]:
+        - generic [ref=e40]: trade SOL
+        - button "collapse trade setup" [ref=e42]:
+          - img [ref=e43]
+      - generic [ref=e44]:
+        - generic [ref=e45]:
+          - generic [ref=e46]: amount
+          - button "v2 $—" [disabled] [ref=e47]
+        - generic [ref=e48]:
+          - generic [ref=e49]: $
+          - textbox "trade amount in USDC" [ref=e50]:
+            - /placeholder: "0"
+          - generic [ref=e51]: usdc
+        - button "Next — leverage" [disabled] [ref=e52]
+  - generic:
+    - dialog:
+      - generic:
+        - paragraph: Connect a wallet
+        - paragraph: Mainnet — real funds. Your wallet owns the basket; after Enable, taps auto-sign via a session key.
+  - generic:
+    - dialog:
+      - generic:
+        - paragraph: Enable One-Click Trading
+        - paragraph: "One approval, account setup only: session key + basket + deposit ledger + delegation — all on Solana L1. No funds move here. Depositing is a separate, explicit step where you choose the amount. After setup, every tap fills on the Ephemeral Rollup with zero popups."
+        - paragraph: "mainnet: the only transfer in this batch is 0.01 SOL to your own session key (it covers the session account rent; recoverable when you revoke). No USDC moves during Enable."
+  - generic:
+    - dialog:
+      - generic:
+        - paragraph: Funds
+        - paragraph: Your money moves only here — your amount, your approval, one transfer at a time.
+        - generic:
+          - button [pressed]: deposit
+          - button: withdraw
+        - generic:
+          - generic: asset
+        - generic:
+          - button [pressed]: USDC
+          - button [disabled]: SOL
+        - generic:
+          - generic:
+            - generic: wallet USDC (base chain)· from
+            - generic: —
+          - generic:
+            - generic: wallet SOL (base chain)
+            - generic: —
+          - generic:
+            - generic: in basket USDC (tradable)
+            - generic: —
+          - generic:
+            - generic: in basket SOL
+            - generic: —
+        - generic:
+          - textbox:
+            - /placeholder: amount to deposit (USDC)
+          - button [disabled]: max
+        - paragraph: connect a wallet first (top right)
+  - generic:
+    - dialog:
+      - generic:
+        - generic:
+          - paragraph: Latency
+          - paragraph: median —
+        - generic:
+          - generic: —
+          - generic: tap SHORT or LONG to measure a real confirm
+        - generic:
+          - generic:
+            - generic: ephemeral rollup
+            - generic: —
+          - generic:
+            - generic: solana L1 typical
+            - generic: ~400 ms
+          - paragraph: ER bar includes YOUR network distance twice; the rollup itself executes in the leftover ms. L1 bar = static ~400 ms network-confirm typical (it EXCLUDES your distance — measured the same way it would read far higher).
+        - paragraph: every confirm lands here — the first fill starts the log
+  - generic:
+    - dialog:
+      - generic:
+        - paragraph: History
+        - paragraph: Every confirmed action this session — newest first, with the real confirm time and the on-chain signature.
+        - paragraph: nothing yet — your first action lands here with its signature
+  - generic:
+    - dialog:
+      - generic:
+        - paragraph: Position
+        - paragraph: flat — no open position
+  - generic:
+    - dialog:
+      - generic:
+        - generic: Markets
+        - button:
+          - img
+      - generic:
+        - button [pressed]:
+          - generic: SOL/USDC
+          - generic: active
+        - button:
+          - generic: BTC/USDC
+        - button:
+          - generic: ETH/USDC
