@@ -1,8 +1,7 @@
-// app/app/page.tsx — the trading terminal. Reached from the landing's "Launch"
-// CTAs. Everything (wallet, streams, actions) is browser state.
+// app/app/page.tsx — the trading terminal in the "Money Gummy" design.
 
-import GhostTerminal from "@/components/terminal/ghost-terminal";
+import GummyTerminal from "@/components/gummy/gummy-terminal";
 
 export default function Page() {
-  return <GhostTerminal />;
+  return <GummyTerminal />;
 }
