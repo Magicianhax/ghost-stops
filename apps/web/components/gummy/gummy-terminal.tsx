@@ -119,6 +119,7 @@ function Inner() {
   const [busyPos, setBusyPos] = useState(false);
   const [attaching, setAttaching] = useState(false);
   const [trailBps, setTrailBps] = useState(50);
+  const [marketQuery, setMarketQuery] = useState("");
   const [registered, setRegistered] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [enabling, setEnabling] = useState(false);
@@ -314,8 +315,10 @@ function Inner() {
           {phase === "deposit" && <button className="act act--deposit act-grow" onClick={() => setModal("funds")}><span className="act-cta-big disp">Deposit USDC to start</span></button>}
           {phase === "flat" && (
             <>
-              <button className={`act act--short act-grow act-side ${busySide === "SHORT" ? "flash-on" : ""}`} onClick={() => void openPosition("SHORT")} disabled={busySide !== null}><span className="big disp">{busySide === "SHORT" ? "Opening…" : <>SHORT <Icon name="down" size={26} /></>}</span><span className="small">tap or ← key</span></button>
-              <button className={`act act--long act-grow act-side ${busySide === "LONG" ? "flash-on" : ""}`} onClick={() => void openPosition("LONG")} disabled={busySide !== null}><span className="big disp">{busySide === "LONG" ? "Opening…" : <>LONG <Icon name="up" size={26} /></>}</span><span className="small">tap or → key</span></button>
+              <button className={`act act--short act-grow act--compact ${busySide === "SHORT" ? "flash-on" : ""}`} onClick={() => void openPosition("SHORT")} disabled={busySide !== null}><span className="big disp">{busySide === "SHORT" ? "Opening…" : <>SHORT <Icon name="down" size={22} /></>}</span></button>
+              <button className="act act--mid" onClick={() => setDrawer("stops")}><Icon name="pulse" size={18} /> Stops{activeStops.length > 0 ? ` · ${activeStops.length}` : ""}</button>
+              <button className="act act--mid" onClick={() => setDrawer("markets")}><Icon name="swap" size={18} /> Markets</button>
+              <button className={`act act--long act-grow act--compact ${busySide === "LONG" ? "flash-on" : ""}`} onClick={() => void openPosition("LONG")} disabled={busySide !== null}><span className="big disp">{busySide === "LONG" ? "Opening…" : <>LONG <Icon name="up" size={22} /></>}</span></button>
             </>
           )}
           {phase === "position" && position && (
@@ -374,13 +377,23 @@ function Inner() {
           <div className="drawer">
             <div className="drawer-head"><span className="drawer-title disp">Markets</span><button className="drawer-x" onClick={() => setDrawer(null)}>✕</button></div>
             <div className="drawer-body">
-              {markets.map((m) => (
-                <button key={m} className={`market-row ${m === market ? "on" : ""}`} onClick={() => { setMarket(m); setDrawer(null); }}>
-                  <span className="tk" style={{ background: "var(--panel-2)", overflow: "hidden", padding: 0, width: 32, height: 32 }}><TokenLogo symbol={m} size={30} /></span>
-                  <span><div className="mr-name">{m}-PERP</div><div className="mr-sym">{m}/USDC</div></span>
-                  {m === market && <span className="mr-px"><span className="up" style={{ fontWeight: 800, fontSize: 12 }}>active</span></span>}
-                </button>
-              ))}
+              <label className="market-search">
+                <Icon name="search" size={18} />
+                <input value={marketQuery} onChange={(e) => setMarketQuery(e.target.value)} placeholder="Search markets…" autoFocus />
+                {marketQuery && <button onClick={() => setMarketQuery("")} aria-label="Clear" style={{ color: "var(--muted)", display: "grid" }}><Icon name="x" size={16} /></button>}
+              </label>
+              {(() => {
+                const q = marketQuery.trim().toLowerCase();
+                const filtered = q ? markets.filter((m) => m.toLowerCase().includes(q)) : markets;
+                if (filtered.length === 0) return <div className="empty"><Ghost size={64} className="em-ghost" /><div className="em-title disp">No match</div><div className="em-sub">No market matches &ldquo;{marketQuery}&rdquo;.</div></div>;
+                return filtered.map((m) => (
+                  <button key={m} className={`market-row ${m === market ? "on" : ""}`} onClick={() => { setMarket(m); setDrawer(null); setMarketQuery(""); }}>
+                    <span className="tk" style={{ background: "var(--panel-2)", overflow: "hidden", padding: 0, width: 32, height: 32 }}><TokenLogo symbol={m} size={30} /></span>
+                    <span><div className="mr-name">{m}-PERP</div><div className="mr-sym">{m}/USDC</div></span>
+                    {m === market && <span className="mr-px"><span className="up" style={{ fontWeight: 800, fontSize: 12 }}>active</span></span>}
+                  </button>
+                ));
+              })()}
             </div>
           </div>
         </>

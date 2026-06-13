@@ -153,6 +153,10 @@
 .gs-terminal .act--deposit{ background:var(--accent); color:var(--onaccent); justify-content:center; }
 .gs-terminal .act-pnl{ font-size:30px; font-weight:800; }
 .gs-terminal .act-cta-big{ font-size:24px; font-weight:800; display:flex; align-items:center; gap:12px; }
+/* compact trade bar — short side buttons + two small middle buttons */
+.gs-terminal .act--compact{ padding:0 22px; min-height:40px; border-radius:var(--r-lg); justify-content:center; }
+.gs-terminal .act--compact .big{ font-size:18px; font-weight:800; display:flex; align-items:center; gap:8px; }
+.gs-terminal .act--mid{ flex:0 0 auto; padding:0 16px; min-height:40px; border-radius:var(--r-lg); gap:7px; background:var(--panel-hi); color:var(--ink); font-family:var(--font-disp); font-weight:800; font-size:13px; }
 .gs-terminal .act-k{ font-size:12px; font-weight:700; opacity:.82; text-transform:uppercase; letter-spacing:.07em; font-family:var(--font-ui); }
 .gs-terminal .kbd{ font-family:var(--font-num); font-size:11px; padding:2px 7px; border-radius:6px; border:2px solid currentColor; opacity:.55; font-weight:700; }
 .gs-terminal .flash-on{ animation:gt-flashpop .85s ease-out; }
@@ -184,6 +188,10 @@
 .gs-terminal .eval-line{ display:flex; justify-content:space-between; align-items:center; font-size:12px; color:var(--muted); font-weight:800; }
 .gs-terminal .eval-count{ color:var(--green); font-family:var(--font-num); }
 .gs-terminal .oc-actions{ margin-top:12px; }
+.gs-terminal .market-search{ width:100%; display:flex; align-items:center; gap:10px; padding:11px 15px; border-radius:var(--r-lg); border:var(--bw) solid var(--outline); background:var(--panel); box-shadow:var(--sh-hard); margin-bottom:4px; }
+.gs-terminal .market-search input{ flex:1; background:none; border:none; outline:none; color:var(--ink); font-family:var(--font-ui); font-weight:700; font-size:15px; }
+.gs-terminal .market-search input::placeholder{ color:var(--faint); }
+.gs-terminal .market-search svg{ color:var(--muted); flex:0 0 auto; }
 .gs-terminal .market-row{ display:flex; align-items:center; gap:13px; padding:12px 14px; border-radius:var(--r-lg); border:var(--bw) solid var(--outline-soft); background:var(--panel); cursor:pointer; transition:.12s; }
 .gs-terminal .market-row:hover{ border-color:var(--outline); transform:translateX(-3px); }
 .gs-terminal .market-row.on{ border-color:var(--green); box-shadow:var(--sh-hard); }
