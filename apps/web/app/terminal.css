@@ -263,8 +263,18 @@
 .gs-terminal .muted{ color:var(--muted); } .gs-terminal .small{ font-size:12px; }
 .gs-terminal .copy-hint{ font-size:11px; color:var(--faint); font-weight:800; }
 
+/* subtle one-time HUD entrance — the chart (data) is instant; the floating
+   chrome settles in once. Not an orchestrated sequence: the user can act
+   immediately. */
+@keyframes gt-hud-in { from { opacity:0; transform:translateY(-6px); } to { opacity:1; transform:translateY(0); } }
+@keyframes gt-hud-up { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+.gs-terminal .topbar{ animation:gt-hud-in .42s cubic-bezier(.2,.8,.25,1) both; }
+.gs-terminal .terminal{ animation:gt-hud-up .46s .04s cubic-bezier(.2,.8,.25,1) both; }
+.gs-terminal .actionzone{ animation:gt-hud-up .46s .08s cubic-bezier(.2,.8,.25,1) both; }
+
 @media (prefers-reduced-motion: reduce){
   .gs-terminal .ghost-float, .gs-terminal .badge.live, .gs-terminal .conn-dot::after, .gs-terminal .st-fired{ animation:none; }
+  .gs-terminal .topbar, .gs-terminal .terminal, .gs-terminal .actionzone{ animation:none; }
 }
 @media (max-width:760px){
   .gs-terminal .seg--lat{ display:none; }
