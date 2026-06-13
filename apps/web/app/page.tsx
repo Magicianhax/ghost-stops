@@ -1,12 +1,8 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// app/page.tsx — the single route. Hands straight off to the client app:
-// everything (wallet, stream, taps) is browser state by design.
-// THE HARD PART: none here — see components/app.tsx for the orchestration.
-// GOTCHAS.md → (no API gotchas here) (../../GOTCHAS.md)
-// ─────────────────────────────────────────────────────────────────────────────
+// app/page.tsx — the single route. Hands off to the client terminal shell;
+// everything (wallet, streams, actions) is browser state by design.
 
-import App from "@/components/app";
+import GhostTerminal from "@/components/terminal/ghost-terminal";
 
 export default function Page() {
-  return <App />;
+  return <GhostTerminal />;
 }
