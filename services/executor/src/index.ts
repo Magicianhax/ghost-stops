@@ -4,7 +4,9 @@
 // every FIRED order is handled once via the on-disk inflight set + the
 // on-chain EXECUTED/FAILED transition.
 import { Connection, Keypair, PublicKey } from "@solana/web3.js";
+import nacl from "tweetnacl";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { loadConfig } from "./config.ts";
 import { FlashExecutor } from "./flash-exec.ts";
@@ -20,6 +22,37 @@ const flash = new FlashExecutor();
 const SESSION_KEYS_PROGRAM = new PublicKey("KeyspM2ssCJbqUhQ4k7sveSiY4WjnYsrXkC8oDbwde5");
 const MAGIC_TRADE = new PublicKey("FTv2RxXarPfNta45HTTMVaGvjzsGg27FXJ3hEKWBhrzV");
 const mainnet = new Connection(process.env.FLASH_BASE_RPC ?? "https://api.mainnet-beta.solana.com", "confirmed");
+
+// ── wallet sign-in: signed message → bearer token for state-changing routes ──
+const AUTH_MAX_AGE_MS = 10 * 60 * 1000; // signed message freshness window
+const TOKEN_TTL_MS = 24 * 3600 * 1000;
+const authTokens = new Map<string, { owner: string; expires: number }>();
+
+function verifySignIn(b: { owner: string; message: string; signature: number[] }): string | null {
+  // The message must be OUR sign-in format, for THIS owner, and fresh —
+  // otherwise any old signature from the wallet could be replayed here.
+  if (!b.message.startsWith("Ghost Stops — sign-in")) return "unexpected message format";
+  const walletLine = b.message.match(/^wallet: (.+)$/m)?.[1];
+  const issuedLine = b.message.match(/^issued: (.+)$/m)?.[1];
+  if (walletLine !== b.owner) return "message wallet does not match owner";
+  const issued = Date.parse(issuedLine ?? "");
+  if (!Number.isFinite(issued) || Math.abs(Date.now() - issued) > AUTH_MAX_AGE_MS) return "message too old";
+  const ok = nacl.sign.detached.verify(
+    new TextEncoder().encode(b.message),
+    Uint8Array.from(b.signature),
+    new PublicKey(b.owner).toBytes()
+  );
+  return ok ? null : "signature verification failed";
+}
+
+/** Owner authenticated by the request's bearer token, or null. */
+function authedOwner(req: IncomingMessage): string | null {
+  const token = req.headers["x-ghost-auth"];
+  if (typeof token !== "string") return null;
+  const entry = authTokens.get(token);
+  if (!entry || entry.expires < Date.now()) return null;
+  return entry.owner;
+}
 
 const log = (msg: string) => console.log(`[${new Date().toISOString()}] ${msg}`);
 
@@ -154,6 +187,19 @@ const server = createServer((req, res) => {
         });
       }
 
+      if (req.method === "POST" && url.pathname === "/auth") {
+        const b = JSON.parse(await readBody(req));
+        if (!b.owner || !b.message || !Array.isArray(b.signature)) {
+          return json(res, 400, { error: "owner, message, signature[] required" });
+        }
+        const fail = verifySignIn(b);
+        if (fail) return json(res, 403, { error: fail });
+        const token = randomBytes(24).toString("hex");
+        authTokens.set(token, { owner: b.owner, expires: Date.now() + TOKEN_TTL_MS });
+        log(`sign-in verified for ${b.owner}`);
+        return json(res, 200, { token });
+      }
+
       if (req.method === "POST" && url.pathname === "/session") {
         const b = JSON.parse(await readBody(req));
         if (!b.owner || !Array.isArray(b.secretKey) || !b.sessionToken || !b.validUntil) {
@@ -195,6 +241,7 @@ const server = createServer((req, res) => {
         const feed = cfg.feeds[market];
         if (!feed) return json(res, 400, { error: `no verified oracle feed for ${market} (have: ${Object.keys(cfg.feeds)})` });
         if (!b.owner) return json(res, 400, { error: "owner required" });
+        if (authedOwner(req) !== b.owner) return json(res, 401, { error: "sign-in required — connect your wallet again" });
         if (!sessions.get(b.owner)) return json(res, 400, { error: "no valid session for owner — enable one-click trading first" });
         const kind = b.kind === "fixed" ? 1 : 0;
         const trailingBps = Math.max(0, Math.min(5000, Number(b.trailingBps ?? 0)));
@@ -227,9 +274,8 @@ const server = createServer((req, res) => {
         const acc = await orders.conn.getAccountInfo(new PublicKey(pda));
         if (!acc) return json(res, 404, { error: "order not found" });
         const order = orders.decode(new PublicKey(pda), acc.data as Buffer);
-        // Only manage orders of owners registered with this executor. Full
-        // per-request wallet auth (signed nonce) is listed in README limitations.
-        if (!sessions.get(order.owner)) return json(res, 403, { error: "unknown owner" });
+        // Only the order's authenticated owner may cancel it.
+        if (authedOwner(req) !== order.owner) return json(res, 401, { error: "sign-in required — only the order owner can cancel" });
         await orders.cancelOrder(pda);
         await orders.cancelTick(order.orderId).catch(() => undefined);
         log(`order cancelled via API: ${pda}`);

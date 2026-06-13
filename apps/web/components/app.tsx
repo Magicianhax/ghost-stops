@@ -18,7 +18,7 @@ import ActionZone, { type Busy, type LastFill, type ZoneState } from "@/componen
 import EnableSheet from "@/components/enable-sheet";
 import FundsSheet from "@/components/funds-sheet";
 import GhostDrawer from "@/components/ghost-panel";
-import { useGhostOrders } from "@/lib/ghost";
+import { clearAuthToken, hasAuthToken, signInWithExecutor, useGhostOrders } from "@/lib/ghost";
 import HistorySheet from "@/components/history-sheet";
 import LatencySheet from "@/components/latency-sheet";
 import MarketDrawer from "@/components/market-drawer";
@@ -195,6 +195,28 @@ function AppInner() {
     setLastClose(null);
     setEnableState(null);
   }, [walletPk]);
+
+  // sign-in on connect: one free signMessage proves wallet ownership and
+  // authorizes attach/cancel calls to the executor for THIS wallet only.
+  // Declining disconnects — connected means signed-in.
+  const signingIn = useRef(false);
+  useEffect(() => {
+    const signMessage = walletCtx.signMessage;
+    if (!walletPk || hasAuthToken(walletPk) || signingIn.current) return;
+    if (!signMessage) return; // wallet without signMessage — degrade silently
+    signingIn.current = true;
+    void (async () => {
+      try {
+        await signInWithExecutor(walletPk, signMessage);
+      } catch (e) {
+        clearAuthToken();
+        setError(`sign-in declined or failed — disconnect: ${errMsg(e)}`);
+        void walletCtx.disconnect().catch(() => undefined);
+      } finally {
+        signingIn.current = false;
+      }
+    })();
+  }, [walletPk, walletCtx]);
 
   // Reconcile optimistic state against the stream: clear "pending" only when a
   // snapshot/metrics frame actually shows the change (or after a timeout).

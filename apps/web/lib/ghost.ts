@@ -118,15 +118,67 @@ export function decodeGhostOrder(pda: PublicKey, data: Uint8Array): GhostOrder |
 
 // ── executor API ──────────────────────────────────────────────────────────────
 
+const AUTH_TOKEN_KEY = "ghost-auth-token";
+
+function storedAuth(): { owner: string; token: string } | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(AUTH_TOKEN_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function hasAuthToken(owner: string | null): boolean {
+  const a = storedAuth();
+  return Boolean(owner && a && a.owner === owner);
+}
+
+export function clearAuthToken(): void {
+  if (typeof window !== "undefined") window.sessionStorage.removeItem(AUTH_TOKEN_KEY);
+}
+
 async function api<T>(path: string, body?: unknown): Promise<T> {
+  const auth = storedAuth();
   const res = await fetch(`${EXECUTOR_URL}${path}`, {
     method: body === undefined ? "GET" : "POST",
-    headers: body === undefined ? undefined : { "Content-Type": "application/json" },
+    headers: {
+      ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+      ...(auth ? { "x-ghost-auth": auth.token } : {}),
+    },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const json = await res.json();
   if (!res.ok) throw new Error(json.error ?? `executor API ${res.status}`);
   return json as T;
+}
+
+/**
+ * Wallet sign-in: one free `signMessage` right after connect. The executor
+ * verifies the ed25519 signature and issues the bearer token that authorizes
+ * attach/cancel calls for THIS wallet only. No transaction, no fees.
+ */
+export async function signInWithExecutor(
+  owner: string,
+  signMessage: (message: Uint8Array) => Promise<Uint8Array>
+): Promise<void> {
+  const message = [
+    "Ghost Stops — sign-in",
+    "",
+    `wallet: ${owner}`,
+    `issued: ${new Date().toISOString()}`,
+    "",
+    "This signature verifies wallet ownership for this session.",
+    "It is free and does NOT send a transaction.",
+  ].join("\n");
+  const signature = await signMessage(new TextEncoder().encode(message));
+  const { token } = await api<{ token: string }>("/auth", {
+    owner,
+    message,
+    signature: Array.from(signature),
+  });
+  window.sessionStorage.setItem(AUTH_TOKEN_KEY, JSON.stringify({ owner, token }));
 }
 
 /** Hand the scoped session to the executor so stops fire with the tab closed.
