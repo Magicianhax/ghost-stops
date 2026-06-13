@@ -17,6 +17,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ActionZone, { type Busy, type LastFill, type ZoneState } from "@/components/action-zone";
 import EnableSheet from "@/components/enable-sheet";
 import FundsSheet from "@/components/funds-sheet";
+import GhostPanel from "@/components/ghost-panel";
 import HistorySheet from "@/components/history-sheet";
 import LatencySheet from "@/components/latency-sheet";
 import MarketDrawer from "@/components/market-drawer";
@@ -534,6 +535,7 @@ function AppInner() {
         openSignal={terminalSignal}
       />
       <PositionChip positions={positions} pending={pending} markUi={markUi} onOpen={() => setSheet("position")} />
+      <GhostPanel owner={walletPk} session={session} positions={positions} markUi={markUi} market={market} />
       {error && (
         <button
           onClick={() => setError(null)}

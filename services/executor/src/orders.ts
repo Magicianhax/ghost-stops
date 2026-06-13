@@ -31,17 +31,80 @@ export interface OnChainOrder {
   isLong: boolean;
 }
 
+export interface CreateOrderInput {
+  owner: string;
+  market: string;
+  feed: PublicKey;
+  kind: number; // 0 trailing, 1 fixed
+  trailingBps: number;
+  initialPrice: bigint;
+  triggerPrice: bigint;
+  triggerAbove: boolean;
+  sizePctBps: number;
+  ocoLink: PublicKey | null;
+  expiry: number;
+  isLong: boolean;
+}
+
 export class OrderClient {
   readonly program: InstanceType<typeof Program>;
   readonly conn: Connection;
+  readonly baseConn: Connection;
   private readonly signer: Keypair;
 
-  constructor(erRpc: string, signer: Keypair) {
+  constructor(erRpc: string, baseRpc: string, signer: Keypair) {
     this.conn = new Connection(erRpc, "confirmed");
+    this.baseConn = new Connection(baseRpc, "confirmed");
     this.signer = signer;
     const idl = JSON.parse(readFileSync(IDL_PATH, "utf8"));
     const provider = new AnchorProvider(this.conn, new Wallet(signer), { commitment: "confirmed" });
     this.program = new Program(idl, provider);
+  }
+
+  orderPda(owner: PublicKey, orderId: bigint): PublicKey {
+    return PublicKey.findProgramAddressSync(
+      [Buffer.from("order"), owner.toBytes(), new BN(orderId.toString()).toArrayLike(Buffer, "le", 8)],
+      this.program.programId
+    )[0];
+  }
+
+  /** Full devnet setup: create (base) → delegate (base) → crank (ER).
+   *  Executor pays everything; the user signs nothing. */
+  async createDelegateSchedule(input: CreateOrderInput, intervalMs = 100, iterations = 86_400_0 / 100): Promise<{ pda: string; orderId: string }> {
+    const ownerPk = new PublicKey(input.owner);
+    const orderId = BigInt(Date.now()); // ms-unique per owner
+    const pda = this.orderPda(ownerPk, orderId);
+
+    const createTx = await this.program.methods
+      .createOrder({
+        orderId: new BN(orderId.toString()),
+        kind: input.kind,
+        marketSymbol: Array.from(Buffer.from(input.market.padEnd(8, "\0").slice(0, 8))),
+        priceFeed: input.feed,
+        trailingBps: input.trailingBps,
+        initialPrice: new BN(input.initialPrice.toString()),
+        triggerPrice: new BN(input.triggerPrice.toString()),
+        triggerAbove: input.triggerAbove,
+        sizePctBps: input.sizePctBps,
+        ocoLink: input.ocoLink,
+        expiry: new BN(input.expiry),
+        isLong: input.isLong,
+        executor: this.signer.publicKey,
+      })
+      .accountsPartial({ payer: this.signer.publicKey, owner: ownerPk })
+      .transaction();
+    await this.sendTo(this.baseConn, createTx, false);
+
+    const delegateTx = await this.program.methods
+      .delegateOrder(ownerPk, new BN(orderId.toString()))
+      .accountsPartial({ payer: this.signer.publicKey, order: pda, validator: null })
+      .transaction();
+    await this.sendTo(this.baseConn, delegateTx, false);
+
+    // state propagation base → ER before the crank's first tick
+    await new Promise((r) => setTimeout(r, 3000));
+    await this.scheduleTick(pda.toBase58(), input.feed.toBase58(), orderId, intervalMs, iterations);
+    return { pda: pda.toBase58(), orderId: orderId.toString() };
   }
 
   decode(pda: PublicKey, data: Buffer): OnChainOrder {
@@ -80,13 +143,17 @@ export class OrderClient {
     return out;
   }
 
-  private async send(tx: Transaction, label: string): Promise<string> {
+  private async sendTo(conn: Connection, tx: Transaction, skipPreflight: boolean): Promise<string> {
     tx.feePayer = this.signer.publicKey;
-    tx.recentBlockhash = (await this.conn.getLatestBlockhash()).blockhash;
+    tx.recentBlockhash = (await conn.getLatestBlockhash()).blockhash;
     tx.sign(this.signer);
-    const sig = await this.conn.sendRawTransaction(tx.serialize(), { skipPreflight: true });
-    await this.conn.confirmTransaction(sig, "confirmed");
+    const sig = await conn.sendRawTransaction(tx.serialize(), { skipPreflight });
+    await conn.confirmTransaction(sig, "confirmed");
     return sig;
+  }
+
+  private send(tx: Transaction, _label: string): Promise<string> {
+    return this.sendTo(this.conn, tx, true);
   }
 
   async markExecuted(pda: string, success: boolean): Promise<string> {

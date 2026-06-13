@@ -1,9 +1,9 @@
 // The execution leg: FIRED order on our ER → session-signed close on Flash's ER.
 // Validation rules from GOTCHAS encoded here; idempotence is the caller's job.
-import { Keypair } from "@solana/web3.js";
 import { FlashV2Client } from "../../../packages/flash-v2/src/index.ts";
 import { sendAndConfirm, signWithKeypair } from "../../../packages/flash-v2/src/sign.ts";
 import type { OnChainOrder } from "./orders.ts";
+import type { OwnerSession } from "./sessions.ts";
 
 export interface FillResult {
   ok: boolean;
@@ -14,18 +14,12 @@ export interface FillResult {
 export class FlashExecutor {
   private readonly flash = new FlashV2Client();
 
-  constructor(
-    private readonly owner: string,
-    private readonly sessionSigner: Keypair,
-    private readonly sessionToken: string
-  ) {}
-
   /** Close (part of) the protected position because `order` fired. */
-  async executeFired(order: OnChainOrder): Promise<FillResult> {
+  async executeFired(order: OnChainOrder, session: OwnerSession): Promise<FillResult> {
     const t0 = Date.now();
     const side = order.isLong ? "LONG" : "SHORT";
     try {
-      const snap = await this.flash.owner(this.owner);
+      const snap = await this.flash.owner(order.owner);
       const pos = Object.values(snap.positionMetrics).find(
         (p) => p.marketSymbol === order.marketSymbol && p.sideUi.toUpperCase() === side
       );
@@ -45,13 +39,13 @@ export class FlashExecutor {
         side,
         inputUsdUi: closeUsd,
         withdrawTokenSymbol: "USDC",
-        owner: this.owner,
+        owner: order.owner,
         slippagePercentage: "0.5",
-        signer: this.sessionSigner.publicKey.toBase58(),
-        sessionToken: this.sessionToken,
+        signer: session.signer.publicKey.toBase58(),
+        sessionToken: session.sessionToken,
       });
       if (!built.transactionBase64) throw new Error("no transaction returned");
-      const tx = signWithKeypair(built.transactionBase64, this.sessionSigner);
+      const tx = signWithKeypair(built.transactionBase64, session.signer);
       const { signature, confirmMs } = await sendAndConfirm(this.flash.network.erRpc, tx, {
         skipPreflight: true,
       });
@@ -63,14 +57,5 @@ export class FlashExecutor {
     } catch (e) {
       return { ok: false, detail: (e as Error).message, latencyMs: Date.now() - t0 };
     }
-  }
-
-  /** Is the protected position still open? (reconcile helper) */
-  async positionOpen(order: OnChainOrder): Promise<boolean> {
-    const side = order.isLong ? "Long" : "Short";
-    const snap = await this.flash.owner(this.owner);
-    return Object.values(snap.positionMetrics).some(
-      (p) => p.marketSymbol === order.marketSymbol && p.sideUi === side
-    );
   }
 }

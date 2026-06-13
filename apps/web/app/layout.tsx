@@ -18,9 +18,9 @@ const grotesk = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: "tap-trade — tap. trade. ~30 ms.",
+  title: "Ghost Stops — on-chain trailing stops for Flash Trade",
   description:
-    "Connect a wallet, Enable One-Click Trading once, then tap SHORT/LONG on a live chart — fills confirm on a MagicBlock Ephemeral Rollup in ~30-50 ms. Flash V2 mainnet demo.",
+    "The trailing stops Solana perps never had: trigger logic runs ON-CHAIN inside a MagicBlock Ephemeral Rollup (100ms crank, zero fees, live Pyth Lazer prices), executing real fills on Flash Trade V2 in ~1s via scoped session keys. Non-custodial.",
 };
 
 export const viewport: Viewport = {

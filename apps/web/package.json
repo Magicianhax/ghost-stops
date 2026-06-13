@@ -1,5 +1,5 @@
 {
-  "name": "tap-trade",
+  "name": "ghost-stops-web",
   "private": true,
   "version": "0.2.0",
   "description": "Tap trading on Flash V2 \u00d7 MagicBlock: connect a wallet, Enable One-Click Trading once, then tap SHORT/LONG on a full-bleed live chart \u2014 fills confirm on the Ephemeral Rollup in ~30-50ms.",
@@ -18,7 +18,7 @@
     "@solana/wallet-adapter-react": "^0.15.39",
     "@solana/wallet-adapter-solflare": "^0.6.28",
     "@solana/web3.js": "^1.98.2",
-    "flash-v2": "workspace:*",
+    "flash-v2": "*",
     "next": "^15.5.19",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
