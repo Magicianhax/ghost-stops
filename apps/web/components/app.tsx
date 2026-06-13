@@ -17,7 +17,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ActionZone, { type Busy, type LastFill, type ZoneState } from "@/components/action-zone";
 import EnableSheet from "@/components/enable-sheet";
 import FundsSheet from "@/components/funds-sheet";
-import GhostPanel from "@/components/ghost-panel";
+import GhostDrawer from "@/components/ghost-panel";
+import { useGhostOrders } from "@/lib/ghost";
 import HistorySheet from "@/components/history-sheet";
 import LatencySheet from "@/components/latency-sheet";
 import MarketDrawer from "@/components/market-drawer";
@@ -101,7 +102,7 @@ function useFeePreview(sizeUsd: string, leverage: number, market: string): strin
 
 // ── the app ───────────────────────────────────────────────────────────────────
 
-type SheetId = "wallet" | "enable" | "latency" | "position" | "market" | "funds" | "history" | null;
+type SheetId = "wallet" | "enable" | "latency" | "position" | "market" | "funds" | "history" | "ghost" | null;
 
 function AppInner() {
   // identity: the connected wallet owns the basket; the session key signs taps
@@ -161,6 +162,9 @@ function AppInner() {
   const feeUsd = useFeePreview(template.sizeUsd, leverageOf(template), market);
   const positions = positionsFor(snapshot, market);
   const basketExists = Boolean(snapshot?.basketPubkey);
+  // ghost stops — lifted here so the top-bar badge and the drawer share one stream
+  const ghostOrders = useGhostOrders(walletPk);
+  const activeStops = ghostOrders.filter((o) => o.state === "active").length;
 
   // account balances — deposited = the on-chain deposit LEDGER (ER-first,
   // keyed by OWNER so it works pre-delegation) + margin in use ACROSS markets
@@ -496,11 +500,13 @@ function AppInner() {
         walletUsdc={balances.usdc}
         inBasketUsd={basketBal?.inBasketUsd ?? null}
         marginInUseUsd={marginInUseUsd}
+        activeStops={activeStops}
         onOpenLatency={() => setSheet("latency")}
         onOpenWallet={() => setSheet("wallet")}
         onOpenMarket={() => setSheet("market")}
         onOpenFunds={() => setSheet("funds")}
         onOpenHistory={() => setSheet("history")}
+        onOpenGhost={() => setSheet("ghost")}
       />
 
       <div aria-hidden />
@@ -537,7 +543,6 @@ function AppInner() {
         openSignal={terminalSignal}
       />
       <PositionChip positions={positions} pending={pending} markUi={markUi} onOpen={() => setSheet("position")} />
-      <GhostPanel owner={walletPk} session={session} positions={positions} markUi={markUi} market={market} />
       {error && (
         <button
           onClick={() => setError(null)}
@@ -596,6 +601,18 @@ function AppInner() {
         markUi={markUi}
         onCloseOne={(side) => void tapCloseOne(side)}
         onReverse={(side) => void tapReverse(side)}
+      />
+      {/* Ghost Stops — RIGHT side drawer; content stays mounted so live
+          subscriptions + executor session registration survive open/close */}
+      <GhostDrawer
+        open={sheet === "ghost"}
+        onClose={() => setSheet(null)}
+        owner={walletPk}
+        session={session}
+        positions={positions}
+        orders={ghostOrders}
+        markUi={markUi}
+        market={market}
       />
       {/* Market selector — LEFT side drawer (owner spec) */}
       <MarketDrawer

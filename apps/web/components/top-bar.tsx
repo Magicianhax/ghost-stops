@@ -55,11 +55,13 @@ export default function TopBar({
   walletUsdc,
   inBasketUsd,
   marginInUseUsd,
+  activeStops,
   onOpenLatency,
   onOpenWallet,
   onOpenMarket,
   onOpenFunds,
   onOpenHistory,
+  onOpenGhost,
 }: {
   /** Pre-formatted price ("$64.42") or null while loading. */
   priceText: string | null;
@@ -75,6 +77,8 @@ export default function TopBar({
   inBasketUsd: number | null;
   /** Σ collateral backing open positions (positionMetrics). */
   marginInUseUsd: number;
+  /** Live ghost orders currently trailing — the badge on the stops segment. */
+  activeStops: number;
   onOpenLatency: () => void;
   onOpenWallet: () => void;
   onOpenMarket: () => void;
@@ -82,6 +86,8 @@ export default function TopBar({
   onOpenFunds: () => void;
   /** Opens the session transaction history. */
   onOpenHistory: () => void;
+  /** Opens the Ghost Stops drawer. */
+  onOpenGhost: () => void;
 }) {
   const { publicKey, disconnect } = useWallet();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -121,8 +127,22 @@ export default function TopBar({
         <RollingNumber value={priceText} className="text-[13px] font-semibold leading-none text-ink" />
       </button>
 
-      {/* right: status · network tag · wallet — hairline-divided segments */}
+      {/* right: stops · status · wallet — hairline-divided segments */}
       <div className="ml-auto flex items-stretch">
+        <button
+          onClick={onOpenGhost}
+          aria-label="ghost stops — open the on-chain stops drawer"
+          title="Ghost Stops — on-chain trailing stops"
+          className="flex items-center gap-1.5 border-l border-edge px-3 font-mono text-[11px] text-ink transition-transform active:scale-[0.99]"
+        >
+          <span aria-hidden>👻</span>
+          <span className="hidden text-[9px] uppercase tracking-[0.12em] text-dim sm:inline">stops</span>
+          {activeStops > 0 && (
+            <span className="rounded border border-long/40 bg-long/10 px-1 font-mono text-[10px] tabular-nums text-long">
+              {activeStops}
+            </span>
+          )}
+        </button>
         <button
           onClick={onOpenLatency}
           aria-label="connection status — open session latency log"
