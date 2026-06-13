@@ -7,7 +7,7 @@ use ephemeral_rollups_sdk::cpi::DelegateConfig;
 use ephemeral_rollups_sdk::ephem::MagicIntentBundleBuilder;
 use magicblock_magic_program_api::{args::ScheduleTaskArgs, instruction::MagicBlockInstruction};
 
-declare_id!("8RzFuFdxwWedBoug44zjWGgs4WhhcpLTmo8e1tZVpCBb");
+declare_id!("y8gjZcwDHqZ8Sz2Uziw5nxr2cWKGyAKaqtNAUJ2mKxh");
 
 pub const ORDER_SEED: &[u8] = b"order";
 
@@ -23,6 +23,10 @@ pub mod ghost_stops {
 
     /// Create an order PDA on the BASE layer (devnet). Delegation happens in
     /// `delegate_order`; from then on all mutations run inside the ER.
+    /// `owner` is NOT a signer: the executor service creates orders on behalf
+    /// of users (it pays devnet rent; users never need devnet SOL). The worst
+    /// an arbitrary creator can do is attach a stop that closes a position
+    /// through the owner's own scoped session — and cancel/mark stay gated.
     pub fn create_order(ctx: Context<CreateOrder>, p: CreateOrderParams) -> Result<()> {
         require!(p.trailing_bps > 0 || p.kind == OrderKind::FixedTrigger as u8, GhostError::BadParams);
         require!(p.kind <= OrderKind::FixedTrigger as u8, GhostError::BadKind);
@@ -279,10 +283,13 @@ pub struct Order {
 #[instruction(p: CreateOrderParams)]
 pub struct CreateOrder<'info> {
     #[account(mut)]
-    pub owner: Signer<'info>,
+    pub payer: Signer<'info>,
+    /// CHECK: the basket owner the order protects; not required to sign —
+    /// see create_order doc comment for the trust argument.
+    pub owner: AccountInfo<'info>,
     #[account(
         init,
-        payer = owner,
+        payer = payer,
         space = 8 + 220,
         seeds = [ORDER_SEED, owner.key().as_ref(), &p.order_id.to_le_bytes()],
         bump

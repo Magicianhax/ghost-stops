@@ -1,5 +1,5 @@
 {
-  "address": "8RzFuFdxwWedBoug44zjWGgs4WhhcpLTmo8e1tZVpCBb",
+  "address": "y8gjZcwDHqZ8Sz2Uziw5nxr2cWKGyAKaqtNAUJ2mKxh",
   "metadata": {
     "name": "ghost_stops",
     "version": "0.1.0",
@@ -70,7 +70,11 @@
       "name": "create_order",
       "docs": [
         "Create an order PDA on the BASE layer (devnet). Delegation happens in",
-        "`delegate_order`; from then on all mutations run inside the ER."
+        "`delegate_order`; from then on all mutations run inside the ER.",
+        "`owner` is NOT a signer: the executor service creates orders on behalf",
+        "of users (it pays devnet rent; users never need devnet SOL). The worst",
+        "an arbitrary creator can do is attach a stop that closes a position",
+        "through the owner's own scoped session — and cancel/mark stay gated."
       ],
       "discriminator": [
         141,
@@ -84,9 +88,15 @@
       ],
       "accounts": [
         {
-          "name": "owner",
+          "name": "payer",
           "writable": true,
           "signer": true
+        },
+        {
+          "name": "owner",
+          "docs": [
+            "see create_order doc comment for the trust argument."
+          ]
         },
         {
           "name": "order",
@@ -177,38 +187,38 @@
             "program": {
               "kind": "const",
               "value": [
-                110,
-                104,
-                125,
                 14,
-                72,
-                138,
-                3,
-                245,
-                251,
-                92,
-                95,
-                89,
-                200,
-                120,
-                202,
-                249,
-                112,
-                155,
-                143,
-                161,
+                97,
+                54,
+                255,
+                195,
+                195,
+                158,
+                56,
+                181,
+                105,
                 99,
-                214,
-                183,
-                10,
-                12,
-                168,
-                121,
-                180,
-                161,
-                22,
-                115,
-                202
+                8,
+                216,
+                163,
+                109,
+                4,
+                74,
+                192,
+                31,
+                93,
+                136,
+                133,
+                11,
+                171,
+                36,
+                208,
+                70,
+                137,
+                254,
+                106,
+                230,
+                246
               ]
             }
           }
@@ -316,7 +326,7 @@
         },
         {
           "name": "owner_program",
-          "address": "8RzFuFdxwWedBoug44zjWGgs4WhhcpLTmo8e1tZVpCBb"
+          "address": "y8gjZcwDHqZ8Sz2Uziw5nxr2cWKGyAKaqtNAUJ2mKxh"
         },
         {
           "name": "delegation_program",

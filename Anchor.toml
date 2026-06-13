@@ -6,7 +6,7 @@ resolution = true
 skip-lint = false
 
 [programs.devnet]
-ghost_stops = "8RzFuFdxwWedBoug44zjWGgs4WhhcpLTmo8e1tZVpCBb"
+ghost_stops = "y8gjZcwDHqZ8Sz2Uziw5nxr2cWKGyAKaqtNAUJ2mKxh"
 
 [registry]
 url = "https://api.apr.dev"
