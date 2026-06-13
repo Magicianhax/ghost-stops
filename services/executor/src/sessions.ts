@@ -21,26 +21,14 @@ interface StoredSession {
 export class SessionStore {
   private readonly sessions = new Map<string, OwnerSession>();
 
-  constructor(private readonly file: string, legacyFile = ".session.json") {
-    if (existsSync(this.file)) {
-      for (const s of JSON.parse(readFileSync(this.file, "utf8")) as StoredSession[]) {
-        this.sessions.set(s.owner, {
-          signer: Keypair.fromSecretKey(Uint8Array.from(s.secretKey)),
-          sessionToken: s.sessionToken,
-          validUntil: s.validUntil,
-        });
-      }
-    } else if (existsSync(legacyFile)) {
-      // Seed from the probe-B single-session file (owner = executor wallet).
-      const s = JSON.parse(readFileSync(legacyFile, "utf8"));
-      const signer = Keypair.fromSecretKey(Uint8Array.from(s.secretKey));
-      if (process.env.PRIVATE_KEY) {
-        // legacy file has no owner field — it was always the executor's own wallet
-        const owner = process.env.GHOST_OWNER;
-        if (owner) {
-          this.sessions.set(owner, { signer, sessionToken: s.sessionToken, validUntil: s.validUntil });
-        }
-      }
+  constructor(private readonly file: string) {
+    if (!existsSync(this.file)) return;
+    for (const s of JSON.parse(readFileSync(this.file, "utf8")) as StoredSession[]) {
+      this.sessions.set(s.owner, {
+        signer: Keypair.fromSecretKey(Uint8Array.from(s.secretKey)),
+        sessionToken: s.sessionToken,
+        validUntil: s.validUntil,
+      });
     }
   }
 

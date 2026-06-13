@@ -212,10 +212,6 @@ export function cancelGhostOrder(pda: string): Promise<{ ok: boolean }> {
   return api(`/orders/${pda}/cancel`);
 }
 
-export function executorHealth(): Promise<{ ok: boolean; program: string; markets: string[] }> {
-  return api("/health");
-}
-
 // ── live hooks ───────────────────────────────────────────────────────────────
 
 /** All ghost orders for an owner, streamed from the ER (ws + poll fallback). */

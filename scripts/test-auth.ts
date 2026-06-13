@@ -32,6 +32,11 @@ const ok = await post("/auth", { owner, message, signature });
 console.log(`valid sign-in → ${ok.status}`, ok.json.token ? "(token issued)" : ok.json);
 if (ok.status !== 200) throw new Error("expected 200");
 
+// 1b. replay the SAME signature → 403 (replay guard)
+const replay = await post("/auth", { owner, message, signature });
+console.log(`replay same signature → ${replay.status} (${replay.json.error})`);
+if (replay.status !== 403) throw new Error("expected 403 on replay");
+
 // 2. orders without token → 401
 const noToken = await post("/orders", { owner, market: "SOL", kind: "trailing", trailingBps: 50, isLong: true });
 console.log(`orders without token → ${noToken.status} (${noToken.json.error})`);

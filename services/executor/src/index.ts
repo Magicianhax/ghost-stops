@@ -26,23 +26,32 @@ const mainnet = new Connection(process.env.FLASH_BASE_RPC ?? "https://api.mainne
 // ── wallet sign-in: signed message → bearer token for state-changing routes ──
 const AUTH_MAX_AGE_MS = 10 * 60 * 1000; // signed message freshness window
 const TOKEN_TTL_MS = 24 * 3600 * 1000;
+const MAX_SESSION_HOURS = 168; // gum SDK session ceiling (7 days)
+const MAX_EXPIRY_SECS = 30 * 24 * 3600; // cap order expiry at 30 days
 const authTokens = new Map<string, { owner: string; expires: number }>();
+const usedSignatures = new Map<string, number>(); // sig hex → expiry, replay guard
+
+/** Parse a base58 pubkey from untrusted input; returns null instead of throwing. */
+function parsePk(s: unknown): PublicKey | null {
+  if (typeof s !== "string") return null;
+  try { return new PublicKey(s); } catch { return null; }
+}
 
 function verifySignIn(b: { owner: string; message: string; signature: number[] }): string | null {
-  // The message must be OUR sign-in format, for THIS owner, and fresh —
-  // otherwise any old signature from the wallet could be replayed here.
+  // The message must be OUR sign-in format, for THIS owner, fresh, and unused —
+  // otherwise an old/leaked signature could be replayed to mint a token.
   if (!b.message.startsWith("Ghost Stops — sign-in")) return "unexpected message format";
-  const walletLine = b.message.match(/^wallet: (.+)$/m)?.[1];
-  const issuedLine = b.message.match(/^issued: (.+)$/m)?.[1];
-  if (walletLine !== b.owner) return "message wallet does not match owner";
-  const issued = Date.parse(issuedLine ?? "");
+  const ownerPk = parsePk(b.owner);
+  if (!ownerPk) return "invalid owner public key";
+  if (b.message.match(/^wallet: (.+)$/m)?.[1] !== b.owner) return "message wallet does not match owner";
+  const issued = Date.parse(b.message.match(/^issued: (.+)$/m)?.[1] ?? "");
   if (!Number.isFinite(issued) || Math.abs(Date.now() - issued) > AUTH_MAX_AGE_MS) return "message too old";
-  const ok = nacl.sign.detached.verify(
-    new TextEncoder().encode(b.message),
-    Uint8Array.from(b.signature),
-    new PublicKey(b.owner).toBytes()
-  );
-  return ok ? null : "signature verification failed";
+  const ok = nacl.sign.detached.verify(new TextEncoder().encode(b.message), Uint8Array.from(b.signature), ownerPk.toBytes());
+  if (!ok) return "signature verification failed";
+  const sigKey = Buffer.from(b.signature).toString("hex");
+  if (usedSignatures.has(sigKey)) return "signature already used";
+  usedSignatures.set(sigKey, Date.now() + AUTH_MAX_AGE_MS);
+  return null;
 }
 
 /** Owner authenticated by the request's bearer token, or null. */
@@ -53,6 +62,14 @@ function authedOwner(req: IncomingMessage): string | null {
   if (!entry || entry.expires < Date.now()) return null;
   return entry.owner;
 }
+
+// purge expired auth tokens + used-signature records so memory stays bounded
+const sweep = setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of authTokens) if (v.expires < now) authTokens.delete(k);
+  for (const [k, v] of usedSignatures) if (v < now) usedSignatures.delete(k);
+}, 60_000);
+sweep.unref();
 
 const log = (msg: string) => console.log(`[${new Date().toISOString()}] ${msg}`);
 
@@ -149,7 +166,7 @@ const json = (res: ServerResponse, code: number, body: unknown) => {
     "Content-Type": "application/json",
     "Access-Control-Allow-Origin": cfg.corsOrigin,
     "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Headers": "Content-Type,x-ghost-auth",
   });
   res.end(JSON.stringify(body));
 };
@@ -166,6 +183,8 @@ const readBody = (req: IncomingMessage): Promise<string> =>
   });
 
 async function readFeedPrice(feed: PublicKey): Promise<bigint> {
+  // only read prices from the configured oracle feeds — never an attacker-supplied account
+  if (!Object.values(cfg.feeds).some((f) => f.equals(feed))) throw new Error("feed not whitelisted");
   const acc = await orders.conn.getAccountInfo(feed);
   if (!acc) throw new Error("feed account not found on ER");
   return (acc.data as Buffer).readBigInt64LE(73);
@@ -189,8 +208,8 @@ const server = createServer((req, res) => {
 
       if (req.method === "POST" && url.pathname === "/auth") {
         const b = JSON.parse(await readBody(req));
-        if (!b.owner || !b.message || !Array.isArray(b.signature)) {
-          return json(res, 400, { error: "owner, message, signature[] required" });
+        if (typeof b.owner !== "string" || typeof b.message !== "string" || !Array.isArray(b.signature)) {
+          return json(res, 400, { error: "owner (string), message (string), signature[] required" });
         }
         const fail = verifySignIn(b);
         if (fail) return json(res, 403, { error: fail });
@@ -202,13 +221,21 @@ const server = createServer((req, res) => {
 
       if (req.method === "POST" && url.pathname === "/session") {
         const b = JSON.parse(await readBody(req));
-        if (!b.owner || !Array.isArray(b.secretKey) || !b.sessionToken || !b.validUntil) {
+        if (typeof b.owner !== "string" || !Array.isArray(b.secretKey) || typeof b.sessionToken !== "string" || typeof b.validUntil !== "number") {
           return json(res, 400, { error: "owner, secretKey[], sessionToken, validUntil required" });
         }
-        // Authenticity check — a registration is accepted only if the session is
-        // REAL: the SessionTokenV2 PDA must derive from exactly (signer, owner)
-        // and must exist on mainnet, which requires the owner wallet's signature
-        // at creation. A spoofed owner therefore cannot register a session.
+        // Defense in depth: only the wallet that completed the signed-message
+        // sign-in may register a session for itself.
+        if (authedOwner(req) !== b.owner) return json(res, 401, { error: "sign-in required before registering a session" });
+        const ownerPk = parsePk(b.owner);
+        if (!ownerPk) return json(res, 400, { error: "invalid owner public key" });
+        const nowSec = Math.floor(Date.now() / 1000);
+        if (b.validUntil <= nowSec || b.validUntil > nowSec + MAX_SESSION_HOURS * 3600) {
+          return json(res, 400, { error: "validUntil out of range" });
+        }
+        // Authenticity check — the SessionTokenV2 PDA must derive from exactly
+        // (signer, owner) and exist on mainnet (which required the owner wallet's
+        // signature at creation). A spoofed owner cannot register a session.
         let signerPk: PublicKey;
         try {
           signerPk = Keypair.fromSecretKey(Uint8Array.from(b.secretKey)).publicKey;
@@ -216,12 +243,7 @@ const server = createServer((req, res) => {
           return json(res, 400, { error: "malformed secretKey" });
         }
         const expected = PublicKey.findProgramAddressSync(
-          [
-            new TextEncoder().encode("session_token_v2"),
-            MAGIC_TRADE.toBytes(),
-            signerPk.toBytes(),
-            new PublicKey(b.owner).toBytes(),
-          ],
+          [new TextEncoder().encode("session_token_v2"), MAGIC_TRADE.toBytes(), signerPk.toBytes(), ownerPk.toBytes()],
           SESSION_KEYS_PROGRAM
         )[0];
         if (expected.toBase58() !== b.sessionToken) {
@@ -240,7 +262,7 @@ const server = createServer((req, res) => {
         const market = String(b.market ?? "SOL").toUpperCase();
         const feed = cfg.feeds[market];
         if (!feed) return json(res, 400, { error: `no verified oracle feed for ${market} (have: ${Object.keys(cfg.feeds)})` });
-        if (!b.owner) return json(res, 400, { error: "owner required" });
+        if (typeof b.owner !== "string") return json(res, 400, { error: "owner required" });
         if (authedOwner(req) !== b.owner) return json(res, 401, { error: "sign-in required — connect your wallet again" });
         if (!sessions.get(b.owner)) return json(res, 400, { error: "no valid session for owner — enable one-click trading first" });
         const kind = b.kind === "fixed" ? 1 : 0;
@@ -248,9 +270,18 @@ const server = createServer((req, res) => {
         if (kind === 0 && (trailingBps < 10 || trailingBps > 5000)) {
           return json(res, 400, { error: "trailingBps must be 10..5000" });
         }
-        const live = await readFeedPrice(feed);
-        const triggerPrice = b.triggerPrice ? BigInt(Math.round(Number(b.triggerPrice) * 1e8)) : 0n;
+        let triggerPrice = 0n;
+        if (b.triggerPrice !== undefined && b.triggerPrice !== null) {
+          const t = Number(b.triggerPrice);
+          if (!Number.isFinite(t) || t < 0) return json(res, 400, { error: "triggerPrice must be a finite number" });
+          triggerPrice = BigInt(Math.round(t * 1e8));
+        }
         if (kind === 1 && triggerPrice <= 0n) return json(res, 400, { error: "triggerPrice required for fixed orders" });
+        const live = await readFeedPrice(feed);
+        const rawExpiry = Number(b.expirySecs);
+        const expiry = Number.isFinite(rawExpiry) && rawExpiry > 0
+          ? Math.floor(Date.now() / 1000) + Math.min(Math.floor(rawExpiry), MAX_EXPIRY_SECS)
+          : 0;
         const result = await orders.createDelegateSchedule({
           owner: b.owner,
           market,
@@ -262,30 +293,32 @@ const server = createServer((req, res) => {
           triggerAbove: Boolean(b.triggerAbove),
           sizePctBps: Math.max(100, Math.min(10_000, Number(b.sizePctBps ?? 10_000))),
           ocoLink: null,
-          expiry: Number(b.expirySecs) > 0 ? Math.floor(Date.now() / 1000) + Number(b.expirySecs) : 0,
+          expiry,
           isLong: b.isLong !== false,
         });
         log(`order created for ${b.owner}: ${result.pda} (${market} ${kind === 0 ? `trail ${trailingBps}bps` : `fixed @ ${b.triggerPrice}`})`);
         return json(res, 200, result);
       }
 
-      if (req.method === "POST" && url.pathname.startsWith("/orders/") && url.pathname.endsWith("/cancel")) {
-        const pda = url.pathname.split("/")[2]!;
-        const acc = await orders.conn.getAccountInfo(new PublicKey(pda));
+      const cancelMatch = /^\/orders\/([1-9A-HJ-NP-Za-km-z]{32,44})\/cancel$/.exec(url.pathname);
+      if (req.method === "POST" && cancelMatch) {
+        const pdaPk = parsePk(cancelMatch[1]);
+        if (!pdaPk) return json(res, 400, { error: "invalid order PDA" });
+        const acc = await orders.conn.getAccountInfo(pdaPk);
         if (!acc) return json(res, 404, { error: "order not found" });
-        const order = orders.decode(new PublicKey(pda), acc.data as Buffer);
+        const order = orders.decode(pdaPk, acc.data as Buffer);
         // Only the order's authenticated owner may cancel it.
         if (authedOwner(req) !== order.owner) return json(res, 401, { error: "sign-in required — only the order owner can cancel" });
-        await orders.cancelOrder(pda);
+        await orders.cancelOrder(order.pda);
         await orders.cancelTick(order.orderId).catch(() => undefined);
-        log(`order cancelled via API: ${pda}`);
+        log(`order cancelled via API: ${order.pda}`);
         return json(res, 200, { ok: true });
       }
 
       return json(res, 404, { error: "not found" });
     } catch (e) {
       log(`API error ${req.method} ${req.url}: ${(e as Error).message}`);
-      return json(res, 500, { error: (e as Error).message });
+      return json(res, 500, { error: "internal error" }); // never leak internals to the caller
     }
   })();
 });

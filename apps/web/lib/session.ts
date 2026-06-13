@@ -82,7 +82,7 @@ export function deriveSessionToken(
  *  ≥60s of validity left. Anything else is cleared. Browser-only. */
 export function loadSession(authority?: string): LoadedSession | null {
   if (typeof window === "undefined") return null;
-  const raw = window.localStorage.getItem(SESSION_STORAGE_KEY);
+  const raw = window.sessionStorage.getItem(SESSION_STORAGE_KEY);
   if (!raw) return null;
   try {
     const stored = JSON.parse(raw) as StoredSession;
@@ -105,7 +105,7 @@ export function loadSession(authority?: string): LoadedSession | null {
 }
 
 export function clearSession(): void {
-  if (typeof window !== "undefined") window.localStorage.removeItem(SESSION_STORAGE_KEY);
+  if (typeof window !== "undefined") window.sessionStorage.removeItem(SESSION_STORAGE_KEY);
 }
 
 /** Poll a signature to confirmation (same approach as flash-v2/sign.ts). */
@@ -183,7 +183,7 @@ export function persistSession(args: {
     authority: args.authority,
     validUntil: args.validUntil,
   };
-  window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(stored));
+  window.sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(stored));
   return {
     keypair: args.sessionSigner,
     token: stored.token,
@@ -192,33 +192,6 @@ export function persistSession(args: {
   };
 }
 
-/**
- * Compat wrapper (build → ONE wallet popup → send → confirm → persist).
- * `enableOneClickTrading` (lib/enable.ts) uses buildSessionTransaction
- * directly so the session rides the same signAllTransactions sheet as the
- * basket/ledger/delegate/deposit txs.
- */
-export async function createSession(opts: {
-  wallet: SessionWallet;
-  connection: Connection;
-  validHours?: number;
-  topUpSol?: number;
-}): Promise<{ session: LoadedSession; signature: string; confirmMs: number }> {
-  const { wallet, connection, validHours, topUpSol } = opts;
-  const built = await buildSessionTransaction(wallet, connection, { validHours, topUpSol });
-  const signed = await wallet.signTransaction(built.tx); // the ONE popup
-  const started = Date.now();                            // measure submit→confirmed only
-  const signature = await connection.sendRawTransaction(signed.serialize(), { maxRetries: 3 });
-  await confirmSignature(connection, signature);
-  const confirmMs = Date.now() - started;
-  const session = persistSession({
-    sessionSigner: built.sessionSigner,
-    sessionToken: built.sessionToken,
-    authority: wallet.publicKey.toBase58(),
-    validUntil: built.validUntil,
-  });
-  return { session, signature, confirmMs };
-}
 
 /**
  * Revoke the session on-chain (rent + leftover top-up refund to the wallet).

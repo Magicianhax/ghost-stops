@@ -69,8 +69,9 @@ export class OrderClient {
   }
 
   /** Full devnet setup: create (base) → delegate (base) → crank (ER).
-   *  Executor pays everything; the user signs nothing. */
-  async createDelegateSchedule(input: CreateOrderInput, intervalMs = 100, iterations = 86_400_0 / 100): Promise<{ pda: string; orderId: string }> {
+   *  Executor pays everything; the user signs nothing. The crank runs for ~24h
+   *  (864,000 ticks at 100ms) — long enough to outlive a 24h session. */
+  async createDelegateSchedule(input: CreateOrderInput, intervalMs = 100, iterations = 864_000): Promise<{ pda: string; orderId: string }> {
     const ownerPk = new PublicKey(input.owner);
     const orderId = BigInt(Date.now()); // ms-unique per owner
     const pda = this.orderPda(ownerPk, orderId);
