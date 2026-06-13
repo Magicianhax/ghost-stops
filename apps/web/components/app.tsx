@@ -50,11 +50,13 @@ function errMsg(e: unknown): string {
 
 
 export default function App() {
-  // Adapters are SSR-safe; autoConnect restores the last wallet silently.
+  // Explicit adapters + every wallet-standard wallet the browser injects
+  // (Brave Wallet, Backpack, …) all appear in the wallet sheet. NO autoConnect:
+  // the user picks a wallet and connects deliberately.
   const wallets = useMemo(() => [new PhantomWalletAdapter(), new SolflareWalletAdapter()], []);
   return (
     <ConnectionProvider endpoint={flash.network.baseRpc}>
-      <WalletProvider wallets={wallets} autoConnect>
+      <WalletProvider wallets={wallets} autoConnect={false}>
         <AppInner />
       </WalletProvider>
     </ConnectionProvider>

@@ -162,7 +162,7 @@ export default function GhostPanel({
   };
 
   return (
-    <aside className="absolute right-3 top-14 z-20 w-[290px] select-none">
+    <aside className="absolute right-3 top-14 z-10 w-[290px] select-none">
       <div className="rounded-lg border border-edge bg-panel/95 shadow-xl backdrop-blur">
         <button
           onClick={() => setOpen((v) => !v)}

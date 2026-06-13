@@ -1,9 +1,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// components/sheet.tsx — the one bottom sheet: hairline notch, slide-up
-// transform, backdrop tap-to-close, Escape, max-h-[80dvh]. THE HARD PART:
-// content stays MOUNTED while hidden (translate-y-full + pointer-events-none)
-// so live state inside (fee previews, step rows) never resets mid-flow.
-// GOTCHAS.md → (pure UI; no API gotchas) (../../GOTCHAS.md)
+// components/sheet.tsx — the one CENTERED modal: scale+fade, backdrop
+// tap-to-close, Escape, ✕ button, max-h-[80dvh]. THE HARD PART: content stays
+// MOUNTED while hidden (opacity-0 + pointer-events-none) so live state inside
+// (fee previews, step rows) never resets mid-flow.
 // ─────────────────────────────────────────────────────────────────────────────
 
 "use client";
@@ -44,19 +43,30 @@ export default function Sheet({
         className={`backdrop-fade absolute inset-0 bg-black/60 ${open ? "opacity-100" : "opacity-0"}`}
         onClick={locked ? undefined : onClose}
       />
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label={label}
-        className={`sheet-up absolute inset-x-0 bottom-0 mx-auto w-full max-w-xl rounded-t-xl border-x border-t border-edge bg-sheet ${
-          open ? "translate-y-0" : "translate-y-full"
-        }`}
-      >
-        <div className="grid place-items-center pb-1.5 pt-2.5">
-          <span className="h-0.5 w-6 bg-edge2" />
-        </div>
-        <div className="max-h-[80dvh] overflow-y-auto px-4 pb-[max(24px,env(safe-area-inset-bottom))] pt-1">
-          {children}
+      <div className="absolute inset-0 grid place-items-center p-4">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={label}
+          className={`modal-pop w-full max-w-md rounded-xl border border-edge bg-sheet shadow-2xl ${
+            open ? "scale-100 opacity-100" : "pointer-events-none scale-95 opacity-0"
+          }`}
+        >
+          <div className="flex items-center justify-between px-4 pb-1 pt-3">
+            <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-faint">{label}</span>
+            {!locked && (
+              <button
+                onClick={onClose}
+                aria-label="close"
+                className="rounded px-1.5 font-mono text-[12px] leading-none text-faint transition-colors hover:text-ink"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+          <div className="max-h-[80dvh] overflow-y-auto px-4 pb-5 pt-1">
+            {children}
+          </div>
         </div>
       </div>
     </div>

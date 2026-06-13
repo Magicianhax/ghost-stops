@@ -95,6 +95,8 @@ body {
 /* Bottom sheets slide on transform only; backdrop fades on opacity only. */
 .sheet-up { transition: transform 380ms cubic-bezier(0.16, 1, 0.3, 1); will-change: transform; }
 .backdrop-fade { transition: opacity 240ms ease; }
+/* Centered modal: scale+fade in place (replaces the bottom slide-up). */
+.modal-pop { transition: transform 240ms cubic-bezier(0.16, 1, 0.3, 1), opacity 200ms ease; will-change: transform, opacity; }
 
 /* Slot-reel digit columns (RollingNumber) — the signature tick. */
 .reel-col { transition: transform 400ms cubic-bezier(0.16, 1, 0.3, 1); will-change: transform; }
