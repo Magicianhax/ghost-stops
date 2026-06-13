@@ -1,8 +1,8 @@
-// app/page.tsx — the single route. Hands off to the client terminal shell;
-// everything (wallet, streams, actions) is browser state by design.
+// app/page.tsx — the marketing landing (Money Gummy). Launches into the
+// terminal at /app.
 
-import GhostTerminal from "@/components/terminal/ghost-terminal";
+import LandingPage from "@/components/landing/landing-page";
 
 export default function Page() {
-  return <GhostTerminal />;
+  return <LandingPage />;
 }

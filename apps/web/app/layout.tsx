@@ -1,44 +1,34 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// app/layout.tsx — root shell. Two distinctive faces load here: Chakra Petch
-// (squared, cut-corner technical display — the "hard edges" in the type itself)
-// for all chrome and labels, and IBM Plex Mono for every numeral. Cool
-// near-black canvas, no rounded corners anywhere (enforced in globals).
+// app/layout.tsx — root shell. The terminal uses Chakra Petch + IBM Plex Mono
+// (hard-edged precision). The marketing landing uses its own "Money Gummy"
+// faces — Baloo 2 (rounded display), Nunito (body), Space Mono (numerals) —
+// scoped to the .gs-landing surface in landing.css.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import type { Metadata, Viewport } from "next";
-import { Chakra_Petch, IBM_Plex_Mono } from "next/font/google";
+import { Chakra_Petch, IBM_Plex_Mono, Baloo_2, Nunito, Space_Mono } from "next/font/google";
 import "./globals.css";
 
-const chakra = Chakra_Petch({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-  variable: "--font-chakra",
-  display: "swap",
-});
-
-const plexMono = IBM_Plex_Mono({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-  variable: "--font-plex-mono",
-  display: "swap",
-});
+const chakra = Chakra_Petch({ subsets: ["latin"], weight: ["400", "500", "600", "700"], variable: "--font-chakra", display: "swap" });
+const plexMono = IBM_Plex_Mono({ subsets: ["latin"], weight: ["400", "500", "600", "700"], variable: "--font-plex-mono", display: "swap" });
+const baloo = Baloo_2({ subsets: ["latin"], weight: ["500", "600", "700", "800"], variable: "--font-baloo", display: "swap" });
+const nunito = Nunito({ subsets: ["latin"], weight: ["400", "600", "700", "800", "900"], variable: "--font-nunito", display: "swap" });
+const spaceMono = Space_Mono({ subsets: ["latin"], weight: ["400", "700"], variable: "--font-space-mono", display: "swap" });
 
 export const metadata: Metadata = {
-  title: "Ghost Stops — on-chain trailing stops for Flash Trade",
+  title: "Ghost Stops — trailing stops that actually fire",
   description:
-    "The trailing stops Solana perps never had: trigger logic runs ON-CHAIN inside a MagicBlock Ephemeral Rollup (100ms crank, zero fees, live Pyth Lazer prices), executing real fills on Flash Trade V2 in ~1s via scoped session keys. Non-custodial.",
+    "Ghost Stops bolts trailing stops, OCO, and brackets onto Flash Trade perps. Your stop trails the price on-chain, evaluated ~10× a second inside a MagicBlock Ephemeral Rollup, and closes you out in about a second. No fees, non-custodial.",
 };
 
 export const viewport: Viewport = {
-  themeColor: "#08090c",
+  themeColor: "#08130d",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${chakra.variable} ${plexMono.variable}`}>
-      <body className="min-h-[100dvh] bg-bg font-mono text-ink antialiased">
-        {children}
-      </body>
+    <html lang="en" className={`${chakra.variable} ${plexMono.variable} ${baloo.variable} ${nunito.variable} ${spaceMono.variable}`}>
+      <body className="min-h-[100dvh] bg-bg font-mono text-ink antialiased">{children}</body>
     </html>
   );
 }
