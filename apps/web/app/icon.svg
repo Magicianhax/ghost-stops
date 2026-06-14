@@ -1,11 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <!-- tap-trade favicon — Flash bolt on the app's green-tinted black. -->
-  <rect width="64" height="64" rx="14" fill="#0a0d0b"/>
-  <path d="M36 8 L18 36 H30 L26 56 L46 26 H33 Z" fill="url(#g)"/>
-  <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#ffe600"/>
-      <stop offset="1" stop-color="#3ee787"/>
-    </linearGradient>
-  </defs>
+  <!-- Ghost Stops favicon — the Money Gummy ghost on dark green. -->
+  <rect width="64" height="64" rx="16" fill="#0c1f17"/>
+  <g transform="translate(7,5) scale(0.5)">
+    <path d="M18 52 a32 32 0 0 1 64 0 L82 86 c-5 7 -11 7 -16 0 c-5 -7 -11 -7 -16 0 c-5 7 -11 7 -16 0 c-5 -7 -11 -7 -16 0 Z" fill="#dffbe9" stroke="#06140d" stroke-width="7" stroke-linejoin="round"/>
+    <ellipse cx="40" cy="50" rx="5.5" ry="7" fill="#06140d"/>
+    <ellipse cx="60" cy="50" rx="5.5" ry="7" fill="#06140d"/>
+    <circle cx="31" cy="62" r="4.4" fill="#5cf0a8" opacity="0.6"/>
+    <circle cx="69" cy="62" r="4.4" fill="#5cf0a8" opacity="0.6"/>
+  </g>
 </svg>

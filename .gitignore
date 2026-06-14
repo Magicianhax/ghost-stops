@@ -14,3 +14,13 @@ test-ledger/
 
 .playwright-mcp/
 .sessions.json
+
+# scratch / local notes
+later.txt
+*.local.*
+tasks/
+.DS_Store
+Thumbs.db
+.vercel/
+*.tsbuildinfo
+next-env.d.ts
