@@ -10,8 +10,12 @@
     "services/*",
     "apps/*"
   ],
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
-    "test": "vitest run"
+    "test": "vitest run",
+    "start": "npm run -w services/executor start"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.32.1",

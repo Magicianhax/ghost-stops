@@ -50,7 +50,9 @@ export function loadConfig(): ExecutorConfig {
     executorKeypair: Keypair.fromSecretKey(bs58.decode(pk.trim())),
     sessionsFile: process.env.SESSIONS_FILE ?? ".sessions.json",
     stateFile: process.env.EXECUTOR_STATE_FILE ?? ".executor-state.json",
-    controlPort: Number(process.env.EXECUTOR_PORT ?? 8787),
+    // PaaS hosts (Railway, Render, Fly) inject a dynamic $PORT and route to it;
+    // honour that first, then an explicit override, then the local default.
+    controlPort: Number(process.env.PORT ?? process.env.EXECUTOR_PORT ?? 8787),
     corsOrigin: process.env.EXECUTOR_CORS_ORIGIN ?? "*",
   };
 }

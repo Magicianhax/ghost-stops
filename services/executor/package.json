@@ -3,8 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "start": "tsx src/index.ts",
     "test": "vitest run"
+  },
+  "dependencies": {
+    "tsx": "^4.22.4"
   }
 }
