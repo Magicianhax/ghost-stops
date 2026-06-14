@@ -16,6 +16,7 @@
     "@solana/wallet-adapter-react": "^0.15.39",
     "@solana/web3.js": "^1.98.2",
     "flash-v2": "*",
+    "framer-motion": "^12.40.0",
     "next": "^15.5.19",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"

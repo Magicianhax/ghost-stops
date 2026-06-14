@@ -23,7 +23,6 @@
     "@solana/web3.js": "^1.98.4",
     "bs58": "^6.0.0",
     "dotenv": "^17.4.2",
-    "framer-motion": "^12.40.0",
     "tweetnacl": "^1.0.3"
   },
   "devDependencies": {
