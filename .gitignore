@@ -17,6 +17,8 @@ test-ledger/
 
 # scratch / local notes
 later.txt
+hackathon.txt
+docs/superpowers/
 *.local.*
 tasks/
 .DS_Store
