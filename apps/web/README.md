@@ -1,4 +1,18 @@
-# tap-trade — tap. trade. ~30 ms.
+> **👻 This is the web-app developer reference for [Ghost Stops](../../README.md).**
+> Start with the [root README](../../README.md) for what the product is and how the whole
+> system fits together. The notes below document the Next.js terminal's internals — the
+> one-signature **Enable** flow, session-key minting, and the two-chain RPC split — which
+> Ghost Stops inherits from Flash's open-source `tap-trade` example and still relies on.
+
+---
+
+# Terminal internals — Enable flow, session keys & two-chain RPCs
+
+> _Heritage note: this app began as Flash's MIT `tap-trade` example. The trading plumbing
+> documented here is unchanged; the Ghost Stops trailing-stop engine is built on top of it.
+> The original example walkthrough is preserved below._
+
+## tap-trade — tap. trade. ~30 ms.
 
 ⏱ Time to run: ~3 min
 
