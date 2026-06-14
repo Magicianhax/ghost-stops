@@ -203,6 +203,7 @@ const server = createServer((req, res) => {
           executor: cfg.executorKeypair.publicKey.toBase58(),
           owners: sessions.owners().length,
           markets: Object.keys(cfg.feeds),
+          feeds: Object.fromEntries(Object.entries(cfg.feeds).map(([k, v]) => [k, v.toBase58()])),
         });
       }
 
@@ -305,7 +306,7 @@ const server = createServer((req, res) => {
         const pdaPk = parsePk(cancelMatch[1]);
         if (!pdaPk) return json(res, 400, { error: "invalid order PDA" });
         const acc = await orders.conn.getAccountInfo(pdaPk);
-        if (!acc) return json(res, 404, { error: "order not found" });
+        if (!acc) return json(res, 200, { ok: true, note: "already gone" }); // idempotent: nothing to cancel
         const order = orders.decode(pdaPk, acc.data as Buffer);
         // Only the order's authenticated owner may cancel it.
         if (authedOwner(req) !== order.owner) return json(res, 401, { error: "sign-in required — only the order owner can cancel" });

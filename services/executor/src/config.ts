@@ -23,9 +23,29 @@ export function loadConfig(): ExecutorConfig {
     baseRpc: process.env.GHOST_BASE_RPC ?? "https://api.devnet.solana.com",
     erRpc: process.env.GHOST_ER_RPC ?? "https://devnet.magicblock.app",
     programId: new PublicKey(process.env.GHOST_PROGRAM_ID ?? "y8gjZcwDHqZ8Sz2Uziw5nxr2cWKGyAKaqtNAUJ2mKxh"),
+    // MagicBlock pushes Pyth Lazer feeds into the devnet ER as PriceUpdateV3
+    // accounts (price i64 @ byte 73 — matches the program's FEED_PRICE_OFFSET, so
+    // every feed below is layout-identical to SOL: no redeploy). Each PDA was
+    // DERIVED (seeds ["price_feed","pyth-lazer",<lazer_id>], program PriCems5…)
+    // and VERIFIED live on the ER + price-matched to Flash's mainnet mark by
+    // scripts/discover-feeds.ts (re-run it to refresh / add markets). These are
+    // the 14 of Flash's markets that have a verified feed; the rest (equities,
+    // FX, commodities, niche tokens) aren't pushed to the ER and stay gated out.
     feeds: {
-      // SOL/USD Pyth Lazer feed — live-verified updating sub-second, 1e8 scale.
       SOL: new PublicKey("ENYwebBThHzmzwPLAQvCucUTsjyfBSZdD9ViXksS4jPu"),
+      BTC: new PublicKey("71wtTRDY8Gxgw56bXFt2oc6qeAbTxzStdNiC425Z51sr"),
+      ETH: new PublicKey("5vaYr1hpv8yrSpu8w3K95x22byYxUJCCNCSYJtqVWPvG"),
+      BNB: new PublicKey("BYcDWZKZcGo8y3252xkK9ZrLoRoeMFaixWD6SoeW12fs"),
+      XRP: new PublicKey("6ghNHfjf5YP1aKtpAfdHK1KrtKEm5Ww6SaDffDTxf5xX"),
+      SUI: new PublicKey("5WLZBMYdJ9PyNLEVxUumz9XZ11446L6dEPHGkPGehJ2j"),
+      HYPE: new PublicKey("CxEkVoCUwSAprvAhdWRPH63JeioQVNDtyZYEMRXuLu6x"),
+      NEAR: new PublicKey("9Uz4aJ2LKfc6Dt4zByG6qRDVtGbHC2ZBHissoc9x343P"),
+      ADA: new PublicKey("9XuTM9AcQJFRrQSMWKuFx2yWWmpjb4u25njfUJZpLU8D"),
+      TRX: new PublicKey("CXgUgTHAohbKS66EwVihupFSJeuyUx2Ej8DN1tm1Yjc8"),
+      TON: new PublicKey("HUDNszzFSAkPpYb9BF9KYtiQZ5CFjyzzZknsYm5cLAto"),
+      TAO: new PublicKey("2MtF3H7Wzkp3xM6G9gdqJp55Aht1QrQdTagCKmHqJUJj"),
+      ZEC: new PublicKey("6XWQr2Y1XEpJrCdVbYGupnDeb3wkR4YXazVXdgn2Lwpg"),
+      ONDO: new PublicKey("Eptpc3kp9riN679SwGTACsuy2KY4LzHwPdeodGPyTJc2"),
     },
     executorKeypair: Keypair.fromSecretKey(bs58.decode(pk.trim())),
     sessionsFile: process.env.SESSIONS_FILE ?? ".sessions.json",

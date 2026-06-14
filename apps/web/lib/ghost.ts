@@ -150,6 +150,10 @@ async function api<T>(path: string, body?: unknown): Promise<T> {
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const json = await res.json();
+  // A 401 means our sign-in token went stale (token expired, or the single-tenant
+  // executor restarted and wiped its in-memory tokens). Drop it so the app
+  // re-signs-in and re-registers automatically instead of getting stuck.
+  if (res.status === 401) clearAuthToken();
   if (!res.ok) throw new Error(json.error ?? `executor API ${res.status}`);
   return json as T;
 }
@@ -209,10 +213,34 @@ export function createGhostOrder(input: CreateGhostInput): Promise<{ pda: string
 }
 
 export function cancelGhostOrder(pda: string): Promise<{ ok: boolean }> {
-  return api(`/orders/${pda}/cancel`);
+  return api(`/orders/${pda}/cancel`, {}); // empty body forces POST (the executor cancel route is POST)
 }
 
 // ── live hooks ───────────────────────────────────────────────────────────────
+
+/** Markets Ghost Stops can actually protect — those with a verified MagicBlock
+ *  oracle feed on the ER — plus each market's feed PDA (so the chart can read
+ *  the real-time oracle directly). Sourced live from the executor's /health so
+ *  the client never guesses; defaults to the one known-verified feed (SOL). */
+export function useGhostMarkets(): { markets: string[]; feeds: Record<string, string> } {
+  const [state, setState] = useState<{ markets: string[]; feeds: Record<string, string> }>({ markets: ["SOL"], feeds: {} });
+  useEffect(() => {
+    let dead = false;
+    fetch(`${EXECUTOR_URL}/health`)
+      .then((r) => r.json())
+      .then((h: { markets?: unknown; feeds?: unknown }) => {
+        if (dead || !Array.isArray(h.markets) || h.markets.length === 0) return;
+        const feeds: Record<string, string> = {};
+        if (h.feeds && typeof h.feeds === "object") {
+          for (const [k, v] of Object.entries(h.feeds as Record<string, unknown>)) if (typeof v === "string") feeds[k.toUpperCase()] = v;
+        }
+        setState({ markets: h.markets.map((m) => String(m).toUpperCase()), feeds });
+      })
+      .catch(() => undefined); // executor down — keep the safe default
+    return () => { dead = true; };
+  }, []);
+  return state;
+}
 
 /** All ghost orders for an owner, streamed from the ER (ws + poll fallback). */
 export function useGhostOrders(owner: string | null): GhostOrder[] {

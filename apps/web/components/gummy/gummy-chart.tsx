@@ -18,6 +18,7 @@ export function GummyChart({
   stopPrice = null,
   liqPrice = null,
   pnlSign = 0,
+  isLong = null,
   style = "line",
 }: {
   points: number[];
@@ -25,6 +26,7 @@ export function GummyChart({
   stopPrice?: number | null;
   liqPrice?: number | null;
   pnlSign?: 1 | -1 | 0;
+  isLong?: boolean | null;
   style?: "line" | "candles";
 }) {
   const wrapRef = useRef<HTMLDivElement | null>(null);
@@ -33,8 +35,8 @@ export function GummyChart({
   const entryRef = useRef<HTMLDivElement | null>(null);
   const stopRef = useRef<HTMLDivElement | null>(null);
   const liqRef = useRef<HTMLDivElement | null>(null);
-  const state = useRef({ points, entryPrice, stopPrice, liqPrice, pnlSign, style });
-  useEffect(() => { state.current = { points, entryPrice, stopPrice, liqPrice, pnlSign, style }; });
+  const state = useRef({ points, entryPrice, stopPrice, liqPrice, pnlSign, isLong, style });
+  useEffect(() => { state.current = { points, entryPrice, stopPrice, liqPrice, pnlSign, isLong, style }; });
 
   useEffect(() => {
     const wrap = wrapRef.current, canvas = canvasRef.current;
@@ -52,6 +54,7 @@ export function GummyChart({
     const ro = new ResizeObserver(resize); ro.observe(wrap); resize();
 
     const dispRef = { v: null as number | null };
+    const stopTrack = { last: null as number | null }; // detect trailing ratchets
     const TOP = 96, BOT = 150;
     let raf = 0;
     const draw = () => {
@@ -81,7 +84,12 @@ export function GummyChart({
       const pad = (max - min) * 0.18; min -= pad; max += pad;
       const plotH = Math.max(1, h - TOP - BOT);
       const Y = (v: number) => TOP + (1 - (v - min) / (max - min)) * plotH;
-      const X = (i: number) => (i / (n - 1)) * w;
+      // reserve a right gutter so the price line ENDS at the price flag (attached),
+      // with a comfortable gap from the right wall — the flag never touches the edge.
+      const TAG_GAP = 24;
+      const tagW = tagRef.current?.offsetWidth ?? 96;
+      const plotR = Math.max(w * 0.45, w - TAG_GAP - tagW);
+      const X = (i: number) => (i / (n - 1)) * plotR;
       const inPos = s.entryPrice != null && s.pnlSign !== 0;
       const line = inPos ? (s.pnlSign > 0 ? green : red) : green;
 
@@ -94,15 +102,32 @@ export function GummyChart({
         ctx.fillStyle = g; ctx.fillRect(0, Math.min(cy, ey), w, Math.abs(cy - ey));
       }
 
+      // LOCKED-PROFIT band — once the trailing stop ratchets onto the profit side
+      // of entry, the span entry→stop is money you keep no matter what. Paint it
+      // solid: "this much is yours." (Locked = stop and price are the same side of
+      // entry, which holds for both long and short.)
+      const profitLocked = inPos && s.isLong != null && s.entryPrice != null && Number.isFinite(s.entryPrice) &&
+        s.stopPrice != null && Number.isFinite(s.stopPrice) &&
+        (s.isLong ? s.stopPrice >= s.entryPrice : s.stopPrice <= s.entryPrice) && s.stopPrice !== s.entryPrice;
+      if (profitLocked && s.entryPrice != null && s.stopPrice != null) {
+        const ey = Y(s.entryPrice), sy = Y(s.stopPrice);
+        const lg = ctx.createLinearGradient(0, ey, 0, sy);
+        lg.addColorStop(0, "rgba(92,240,168,0.10)"); lg.addColorStop(1, "rgba(92,240,168,0.30)");
+        ctx.fillStyle = lg; ctx.fillRect(0, Math.min(ey, sy), w, Math.abs(ey - sy));
+        // solid baseline at the locked floor (the stop) — the "can't drop below this" line
+        ctx.strokeStyle = "rgba(92,240,168,0.9)"; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(0, sy); ctx.lineTo(w, sy); ctx.stroke();
+      }
+
       if (s.style === "candles") {
         const groups = 30, per = Math.max(1, Math.floor(n / groups));
-        const bw = (w / Math.ceil(n / per)) * 0.62;
+        const bw = (plotR / Math.ceil(n / per)) * 0.62;
         let gi = 0;
         for (let i = 0; i < n; i += per) {
           const slice = data.slice(i, i + per);
           const o = slice[0]!, c = i + per >= n ? disp : slice[slice.length - 1]!;
           const hiV = Math.max(...slice), loV = Math.min(...slice);
-          const x = (gi + 0.5) * (w / Math.ceil(n / per));
+          const x = (gi + 0.5) * (plotR / Math.ceil(n / per));
           const up = c >= o; ctx.fillStyle = up ? green : red; ctx.strokeStyle = up ? green : red; ctx.lineWidth = 3;
           ctx.beginPath(); ctx.moveTo(x, Y(hiV)); ctx.lineTo(x, Y(loV)); ctx.stroke();
           const bodyTop = Y(Math.max(o, c)), bodyH = Math.max(3, Math.abs(Y(o) - Y(c)));
@@ -117,6 +142,9 @@ export function GummyChart({
         for (let i = 0; i < n; i++) { const v = i === n - 1 ? disp : data[i]!; const x = X(i), y = Y(v); if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); }
         ctx.stroke(); ctx.shadowBlur = 0;
       }
+      // tip dot where the line attaches to the price flag
+      ctx.fillStyle = line; ctx.shadowColor = glow; ctx.shadowBlur = 12;
+      ctx.beginPath(); ctx.arc(plotR, Y(disp), 4.5, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0;
 
       // stop dashed line
       if (s.stopPrice != null && Number.isFinite(s.stopPrice)) {
@@ -134,6 +162,15 @@ export function GummyChart({
       if (tagRef.current) { tagRef.current.style.top = `${Y(disp)}px`; tagRef.current.textContent = `$${disp.toFixed(2)}`; tagRef.current.className = `price-tag num${s.pnlSign < 0 && inPos ? " dn" : ""}`; }
       place(entryRef.current, s.entryPrice);
       place(stopRef.current, s.stopPrice);
+      // live stop value + a pulse whenever the trailing stop ratchets to a new level
+      if (stopRef.current && s.stopPrice != null && Number.isFinite(s.stopPrice)) {
+        stopRef.current.textContent = `stop $${s.stopPrice.toFixed(2)}`;
+        if (stopTrack.last != null && Math.abs(s.stopPrice - stopTrack.last) > Math.max(Math.abs(s.stopPrice) * 1e-6, 1e-9)) {
+          const el = stopRef.current;
+          el.classList.remove("ratchet"); void el.offsetWidth; el.classList.add("ratchet"); // restart anim
+        }
+        stopTrack.last = s.stopPrice;
+      }
       place(liqRef.current, s.liqPrice);
     };
     raf = requestAnimationFrame(draw);

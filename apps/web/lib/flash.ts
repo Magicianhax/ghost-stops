@@ -38,8 +38,9 @@ export const MARKETS = ["SOL", "BTC", "ETH"];
 export const MARKET = MARKETS[0] as string;
 export const COLLATERAL = "USDC";
 
-/** Price poll cadence — 1s keeps the chart line + slot-reel digits alive. */
-export const PRICE_POLL_MS = 1000;
+/** Price poll floor — usePrice self-schedules (fires the next request when the
+ *  last resolves), so this is the minimum gap, not a fixed cadence. */
+export const PRICE_POLL_MS = 250;
 
 /** Static, clearly-labeled comparison baseline for the latency HUD. */
 export const SOLANA_L1_TYPICAL_MS = 400;

@@ -39,8 +39,9 @@ async function fetchSeed(market: string, points: number): Promise<number[] | nul
   }
 }
 
-/** How many ticks the chart keeps (~4 min at the 1s poll). */
-export const PRICE_HISTORY_CAP = 240;
+/** How many ticks the chart keeps. Sized for the fast (~250ms) poll so the
+ *  visible window stays ~3 min instead of shrinking as the cadence speeds up. */
+export const PRICE_HISTORY_CAP = 720;
 
 /**
  * Append `price.priceUi` once per poll tick (object identity = one tick),

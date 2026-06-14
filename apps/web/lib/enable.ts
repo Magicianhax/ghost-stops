@@ -41,7 +41,7 @@ export interface EnableStepRow {
 
 export interface EnableState {
   phase: "precheck" | "building" | "signing" | "submitting" | "done" | "stopped";
-  /** Live text for the action-zone pill ("approve in wallet…", "init-basket…"). */
+  /** Live text for the action-zone pill ("approve in wallet…", "Creating your account…"). */
   headline: string;
   steps: EnableStepRow[];
   /** Set when the wallet can't pay setup rent. */
@@ -212,24 +212,24 @@ export async function enableOneClickTrading(args: {
   const plan: Planned[] = [];
   try {
     if (needs.session) {
-      row("session", "create session key", { status: "active", note: "building…" });
+      row("session", "Securing instant trading", { status: "active", note: "building…" });
       const built = await buildSessionTransaction(anchorWallet, baseConnection, {
       });
-      plan.push({ id: "session", label: "create session key", action: "create-session", tx: built.tx });
+      plan.push({ id: "session", label: "Securing instant trading", action: "create-session", tx: built.tx });
       // Persisted only after its tx confirms (step 5 below).
       sessionParts = built;
-      row("session", "create session key", { status: "active", note: "ready to sign" });
+      row("session", "Securing instant trading", { status: "active", note: "ready to sign" });
     } else {
-      row("session", "create session key", { status: "skipped", note: "session still valid" });
+      row("session", "Securing instant trading", { status: "skipped", note: "session still valid" });
     }
 
     const builders: Array<{ id: EnableStepId; label: string; action: string; build: () => Promise<{ transactionBase64: string }> }> = [];
-    if (needs.basket) builders.push({ id: "basket", label: "init-basket", action: "init-basket", build: () => flash.initBasket({ owner }) });
-    else row("basket", "init-basket", { status: "skipped", note: "basket already on-chain" });
-    if (needs.ledger) builders.push({ id: "ledger", label: "init-deposit-ledger", action: "init-deposit-ledger", build: () => flash.initDepositLedger({ owner }) });
-    else row("ledger", "init-deposit-ledger", { status: "skipped", note: "already set up" });
-    if (needs.delegate) builders.push({ id: "delegate", label: "delegate-basket", action: "delegate-basket", build: () => flash.delegateBasket({ payer: owner, owner }) });
-    else row("delegate", "delegate-basket", { status: "skipped", note: "already delegated" });
+    if (needs.basket) builders.push({ id: "basket", label: "Creating your account", action: "Creating your account", build: () => flash.initBasket({ owner }) });
+    else row("basket", "Creating your account", { status: "skipped", note: "basket already on-chain" });
+    if (needs.ledger) builders.push({ id: "ledger", label: "Setting up your balance", action: "Setting up your balance", build: () => flash.initDepositLedger({ owner }) });
+    else row("ledger", "Setting up your balance", { status: "skipped", note: "already set up" });
+    if (needs.delegate) builders.push({ id: "delegate", label: "Connecting to the rollup", action: "Connecting to the rollup", build: () => flash.delegateBasket({ payer: owner, owner }) });
+    else row("delegate", "Connecting to the rollup", { status: "skipped", note: "already delegated" });
 
     // CONSENT RULE: no deposit in this batch — a fresh basket starts EMPTY and
     // the user funds it via the explicit Deposit sheet (their amount, their
@@ -301,7 +301,7 @@ export async function enableOneClickTrading(args: {
     const tx = signed[i];
     if (!p || !tx) continue;
     state.headline = `${p.action}…`;
-    row(p.id, p.label, { status: "active", note: "submitting to the base chain…" });
+    row(p.id, p.label, { status: "active", note: "saving…" });
     try {
       const { signature, ms } = await submitAndConfirm(tx);
       row(p.id, p.label, { status: "done", note: undefined, ms, signature });

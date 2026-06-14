@@ -17,14 +17,19 @@ import {
 } from "flash-v2";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { baseConnection, flash } from "./flash";
+import { ghostEr } from "./ghost";
 import { MAGIC_TRADE_PROGRAM } from "./session";
+
+/** Byte offset of the i64 price in the MagicBlock ER Pyth feed (PriceUpdateV3);
+ *  exponent i32 follows at 89. Mirrors the program's FEED_PRICE_OFFSET. */
+const FEED_PRICE_OFF = 73, FEED_EXP_OFF = 89;
 
 /** The magic-trade program on the ACTIVE network (ledger reads filter on it). */
 const MAGIC_TRADE_PROGRAM_ID = MAGIC_TRADE_PROGRAM.toBase58();
 
 // ── price ticker ─────────────────────────────────────────────────────────────
 
-export function usePrice(symbol: string, intervalMs = 1000): {
+export function usePrice(symbol: string, floorMs = 250): {
   price: PriceInfo | null;
   drift: "up" | "down" | "flat";
 } {
@@ -39,7 +44,13 @@ export function usePrice(symbol: string, intervalMs = 1000): {
     setDrift("flat");
     last.current = null;
     let dead = false;
-    const tick = async () => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    // SELF-SCHEDULING: fire the next request as soon as the last one resolves
+    // (capped by `floorMs`), so the chart updates as fast as the API answers
+    // instead of a fixed slow cadence. Back off on error / rate-limit (429) so
+    // we never hammer the endpoint into the ground.
+    const loop = async () => {
+      let wait = floorMs;
       try {
         const p = await flash.price(symbol);
         if (dead) return;
@@ -49,13 +60,95 @@ export function usePrice(symbol: string, intervalMs = 1000): {
         last.current = p.priceUi;
         setPrice(p);
       } catch {
-        /* keep last price; next tick retries */
+        wait = 1500; // transient error / rate-limit — ease off, keep last price
+      }
+      if (!dead) timer = setTimeout(loop, wait);
+    };
+    void loop();
+    return () => { dead = true; if (timer) clearTimeout(timer); };
+  }, [symbol, floorMs]);
+
+  return { price, drift };
+}
+
+/**
+ * Real-time price: when the market has a verified MagicBlock ER oracle feed,
+ * SUBSCRIBE to that feed account over WebSocket (push at the feed's native
+ * 50–200ms cadence) — the EXACT price the on-chain trailing stop evaluates
+ * against. For markets with no ER feed (equities/FX/etc.), fall back to the
+ * fast self-scheduling Flash REST poll.
+ */
+export function useLivePrice(symbol: string, feedPda: string | null, floorMs = 250): {
+  price: PriceInfo | null;
+  drift: "up" | "down" | "flat";
+} {
+  const [price, setPrice] = useState<PriceInfo | null>(null);
+  const [drift, setDrift] = useState<"up" | "down" | "flat">("flat");
+  const last = useRef<number | null>(null);
+
+  useEffect(() => {
+    setPrice(null);
+    setDrift("flat");
+    last.current = null;
+    let dead = false;
+
+    // The WS pushes ~10-20 ticks/sec; re-rendering the heavy terminal tree that
+    // fast starves the 60fps canvas. THROTTLE React state to ~10/sec (leading +
+    // trailing, so the first tick is instant and the latest is never dropped) —
+    // the chart interpolates between updates, so it stays buttery smooth.
+    const EMIT_MS = 100;
+    let lastEmit = 0;
+    let trailing: ReturnType<typeof setTimeout> | undefined;
+    let pending: { p: number; r: number; e: number } | null = null;
+    const emit = (p: number, r: number, e: number) => {
+      if (dead) return;
+      if (last.current !== null && p !== last.current) setDrift(p > last.current ? "up" : "down");
+      last.current = p;
+      setPrice({ price: r, exponent: e, confidence: 0, priceUi: p, timestampUs: 0, marketSession: "regular" });
+    };
+    const apply = (p: number, r: number, e: number) => {
+      if (dead || !Number.isFinite(p) || p <= 0) return;
+      const now = Date.now(), gap = now - lastEmit;
+      if (gap >= EMIT_MS) { lastEmit = now; emit(p, r, e); }
+      else {
+        pending = { p, r, e };
+        if (!trailing) trailing = setTimeout(() => { trailing = undefined; if (pending && !dead) { lastEmit = Date.now(); emit(pending.p, pending.r, pending.e); pending = null; } }, EMIT_MS - gap);
       }
     };
-    void tick();
-    const timer = setInterval(tick, intervalMs);
-    return () => { dead = true; clearInterval(timer); };
-  }, [symbol, intervalMs]);
+
+    const cleanups: Array<() => void> = [() => { if (trailing) clearTimeout(trailing); }];
+
+    if (feedPda) {
+      // ── real-time: MagicBlock ER oracle feed account subscription (push) ──
+      const pk = new PublicKey(feedPda);
+      const parse = (data: Uint8Array) => {
+        if (data.length < FEED_EXP_OFF + 4) return;
+        const dv = new DataView(data.buffer, data.byteOffset, data.byteLength);
+        const raw = Number(dv.getBigInt64(FEED_PRICE_OFF, true));
+        const exp = dv.getInt32(FEED_EXP_OFF, true);
+        apply(raw * Math.pow(10, -Math.abs(exp)), raw, exp);
+      };
+      void ghostEr.getAccountInfo(pk, "processed").then((acc) => { if (acc) parse(acc.data); }).catch(() => undefined);
+      let subId: number | null = null;
+      try { subId = ghostEr.onAccountChange(pk, (acc) => parse(acc.data), "processed"); }
+      catch { /* ws unavailable — the fallback poll below covers it */ }
+      const fb = setInterval(() => { void ghostEr.getAccountInfo(pk, "processed").then((acc) => { if (acc) parse(acc.data); }).catch(() => undefined); }, 2000);
+      cleanups.push(() => { clearInterval(fb); if (subId !== null) void ghostEr.removeAccountChangeListener(subId).catch(() => undefined); });
+    } else {
+      // ── fallback: fast self-scheduling Flash REST poll ──
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const loop = async () => {
+        let wait = floorMs;
+        try { const p = await flash.price(symbol); if (!dead) apply(p.priceUi, p.price, p.exponent); }
+        catch { wait = 1500; }
+        if (!dead) timer = setTimeout(loop, wait);
+      };
+      void loop();
+      cleanups.push(() => { if (timer) clearTimeout(timer); });
+    }
+
+    return () => { dead = true; for (const c of cleanups) c(); };
+  }, [symbol, feedPda, floorMs]);
 
   return { price, drift };
 }
