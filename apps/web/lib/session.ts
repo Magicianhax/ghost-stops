@@ -82,7 +82,19 @@ export function deriveSessionToken(
  *  ≥60s of validity left. Anything else is cleared. Browser-only. */
 export function loadSession(authority?: string): LoadedSession | null {
   if (typeof window === "undefined") return null;
-  const raw = window.sessionStorage.getItem(SESSION_STORAGE_KEY);
+  // Read from localStorage so the session survives tab/window close (within its
+  // 24h validity). Migrate a legacy per-tab sessionStorage entry — older builds
+  // stored it there, which forced a fresh ~0.01 SOL session on every tab close —
+  // so returning users keep their existing session instead of paying again.
+  let raw = window.localStorage.getItem(SESSION_STORAGE_KEY);
+  if (!raw) {
+    const legacy = window.sessionStorage.getItem(SESSION_STORAGE_KEY);
+    if (legacy) {
+      window.localStorage.setItem(SESSION_STORAGE_KEY, legacy);
+      window.sessionStorage.removeItem(SESSION_STORAGE_KEY);
+      raw = legacy;
+    }
+  }
   if (!raw) return null;
   try {
     const stored = JSON.parse(raw) as StoredSession;
@@ -105,7 +117,9 @@ export function loadSession(authority?: string): LoadedSession | null {
 }
 
 export function clearSession(): void {
-  if (typeof window !== "undefined") window.sessionStorage.removeItem(SESSION_STORAGE_KEY);
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(SESSION_STORAGE_KEY);
+  window.sessionStorage.removeItem(SESSION_STORAGE_KEY); // also drop any legacy entry
 }
 
 /** Poll a signature to confirmation (same approach as flash-v2/sign.ts). */
@@ -183,7 +197,7 @@ export function persistSession(args: {
     authority: args.authority,
     validUntil: args.validUntil,
   };
-  window.sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(stored));
+  window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(stored));
   return {
     keypair: args.sessionSigner,
     token: stored.token,
