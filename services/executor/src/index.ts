@@ -8,7 +8,7 @@ import nacl from "tweetnacl";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { loadConfig } from "./config.ts";
+import { loadConfig, normalizeRpcUrl } from "./config.ts";
 import { FlashExecutor } from "./flash-exec.ts";
 import { OrderClient, STATE, type OnChainOrder } from "./orders.ts";
 import { SessionStore } from "./sessions.ts";
@@ -21,7 +21,7 @@ const flash = new FlashExecutor();
 // Session authenticity constants (mainnet — where Flash + the Keysp program live).
 const SESSION_KEYS_PROGRAM = new PublicKey("KeyspM2ssCJbqUhQ4k7sveSiY4WjnYsrXkC8oDbwde5");
 const MAGIC_TRADE = new PublicKey("FTv2RxXarPfNta45HTTMVaGvjzsGg27FXJ3hEKWBhrzV");
-const mainnet = new Connection(process.env.FLASH_BASE_RPC ?? "https://api.mainnet-beta.solana.com", "confirmed");
+const mainnet = new Connection(normalizeRpcUrl(process.env.FLASH_BASE_RPC, "https://api.mainnet-beta.solana.com"), "confirmed");
 
 // ── wallet sign-in: signed message → bearer token for state-changing routes ──
 const AUTH_MAX_AGE_MS = 10 * 60 * 1000; // signed message freshness window

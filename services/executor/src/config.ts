@@ -2,6 +2,18 @@ import "dotenv/config";
 import { Keypair, PublicKey } from "@solana/web3.js";
 import bs58 from "bs58";
 
+/**
+ * Normalize an RPC endpoint from env: trim, fall back when blank, and prepend
+ * https:// when the protocol is missing. A bare host like "x.helius-rpc.com/..."
+ * is a common paste mistake that otherwise crashes `new Connection(...)` at
+ * startup with "Endpoint URL must start with `http:` or `https:`".
+ */
+export function normalizeRpcUrl(raw: string | undefined, fallback: string): string {
+  const v = raw?.trim();
+  if (!v) return fallback;
+  return /^https?:\/\//i.test(v) ? v : `https://${v}`;
+}
+
 export interface ExecutorConfig {
   baseRpc: string;
   erRpc: string;
@@ -20,8 +32,8 @@ export function loadConfig(): ExecutorConfig {
   const pk = process.env.PRIVATE_KEY;
   if (!pk) throw new Error("PRIVATE_KEY missing from .env");
   return {
-    baseRpc: process.env.GHOST_BASE_RPC ?? "https://api.devnet.solana.com",
-    erRpc: process.env.GHOST_ER_RPC ?? "https://devnet.magicblock.app",
+    baseRpc: normalizeRpcUrl(process.env.GHOST_BASE_RPC, "https://api.devnet.solana.com"),
+    erRpc: normalizeRpcUrl(process.env.GHOST_ER_RPC, "https://devnet.magicblock.app"),
     programId: new PublicKey(process.env.GHOST_PROGRAM_ID ?? "y8gjZcwDHqZ8Sz2Uziw5nxr2cWKGyAKaqtNAUJ2mKxh"),
     // MagicBlock pushes Pyth Lazer feeds into the devnet ER as PriceUpdateV3
     // accounts (price i64 @ byte 73 — matches the program's FEED_PRICE_OFFSET, so
