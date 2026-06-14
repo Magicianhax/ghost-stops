@@ -194,7 +194,9 @@ const server = createServer((req, res) => {
   void (async () => {
     try {
       if (req.method === "OPTIONS") return json(res, 204, {});
-      const url = new URL(req.url ?? "/", "http://local");
+      // Collapse leading "//" → "/" so a client whose base URL has a trailing
+      // slash (".../" + "/session" = "//session") still matches exact routes.
+      const url = new URL((req.url ?? "/").replace(/^\/{2,}/, "/"), "http://local");
 
       if (req.method === "GET" && url.pathname === "/health") {
         return json(res, 200, {

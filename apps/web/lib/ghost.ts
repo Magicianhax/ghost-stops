@@ -9,7 +9,9 @@ import { Connection, PublicKey } from "@solana/web3.js";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { LoadedSession } from "@/lib/session";
 
-export const EXECUTOR_URL = process.env.NEXT_PUBLIC_EXECUTOR_URL ?? "http://localhost:8787";
+// Strip trailing slash(es): the executor matches exact paths (`/session`,
+// `/orders`), so a base URL ending in "/" would produce "//session" and 404.
+export const EXECUTOR_URL = (process.env.NEXT_PUBLIC_EXECUTOR_URL ?? "http://localhost:8787").replace(/\/+$/, "");
 export const GHOST_PROGRAM = new PublicKey(
   process.env.NEXT_PUBLIC_GHOST_PROGRAM ?? "y8gjZcwDHqZ8Sz2Uziw5nxr2cWKGyAKaqtNAUJ2mKxh"
 );
