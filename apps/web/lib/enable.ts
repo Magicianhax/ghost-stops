@@ -345,7 +345,7 @@ export async function enableOneClickTrading(args: {
       // there) is only safe to skip on an account-creation step that did NOT fail
       // for lack of SOL — the System Program also reports 0x1 as "insufficient
       // funds", which must surface, not be swallowed.
-      const outOfSol = /insufficient lamports/i.test(raw);
+      const outOfSol = /insufficient lamports|insufficient funds|debit an account|ResultWithNegativeLamports/i.test(raw);
       const reinitStep = p.id === "basket" || p.id === "ledger" || p.id === "delegate";
       if (!outOfSol && (RE_ALREADY.test(raw) || (reinitStep && /custom program error: 0x1\b/i.test(raw)))) {
         row(p.id, p.label, { status: "done", note: "already set up" });

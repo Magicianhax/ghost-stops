@@ -125,7 +125,19 @@ const AUTH_TOKEN_KEY = "ghost-auth-token";
 function storedAuth(): { owner: string; token: string } | null {
   if (typeof window === "undefined") return null;
   try {
-    const raw = window.sessionStorage.getItem(AUTH_TOKEN_KEY);
+    // localStorage so the sign-in survives across tabs/reloads (parity with the
+    // session keypair, which is also in localStorage) — otherwise a 2nd tab forces
+    // a fresh signMessage and flashes "stops are paused". Migrate a legacy per-tab
+    // sessionStorage token on first read.
+    let raw = window.localStorage.getItem(AUTH_TOKEN_KEY);
+    if (!raw) {
+      const legacy = window.sessionStorage.getItem(AUTH_TOKEN_KEY);
+      if (legacy) {
+        window.localStorage.setItem(AUTH_TOKEN_KEY, legacy);
+        window.sessionStorage.removeItem(AUTH_TOKEN_KEY);
+        raw = legacy;
+      }
+    }
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
@@ -138,7 +150,9 @@ export function hasAuthToken(owner: string | null): boolean {
 }
 
 export function clearAuthToken(): void {
-  if (typeof window !== "undefined") window.sessionStorage.removeItem(AUTH_TOKEN_KEY);
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(AUTH_TOKEN_KEY);
+  window.sessionStorage.removeItem(AUTH_TOKEN_KEY);
 }
 
 async function api<T>(path: string, body?: unknown): Promise<T> {
@@ -184,7 +198,7 @@ export async function signInWithExecutor(
     message,
     signature: Array.from(signature),
   });
-  window.sessionStorage.setItem(AUTH_TOKEN_KEY, JSON.stringify({ owner, token }));
+  window.localStorage.setItem(AUTH_TOKEN_KEY, JSON.stringify({ owner, token }));
 }
 
 /** Hand the scoped session to the executor so stops fire with the tab closed.
@@ -224,22 +238,29 @@ export function cancelGhostOrder(pda: string): Promise<{ ok: boolean }> {
  *  oracle feed on the ER — plus each market's feed PDA (so the chart can read
  *  the real-time oracle directly). Sourced live from the executor's /health so
  *  the client never guesses; defaults to the one known-verified feed (SOL). */
-export function useGhostMarkets(): { markets: string[]; feeds: Record<string, string> } {
-  const [state, setState] = useState<{ markets: string[]; feeds: Record<string, string> }>({ markets: ["SOL"], feeds: {} });
+export function useGhostMarkets(): { markets: string[]; feeds: Record<string, string>; reachable: boolean } {
+  const [state, setState] = useState<{ markets: string[]; feeds: Record<string, string>; reachable: boolean }>({ markets: ["SOL"], feeds: {}, reachable: false });
   useEffect(() => {
     let dead = false;
-    fetch(`${EXECUTOR_URL}/health`)
-      .then((r) => r.json())
-      .then((h: { markets?: unknown; feeds?: unknown }) => {
-        if (dead || !Array.isArray(h.markets) || h.markets.length === 0) return;
-        const feeds: Record<string, string> = {};
-        if (h.feeds && typeof h.feeds === "object") {
-          for (const [k, v] of Object.entries(h.feeds as Record<string, unknown>)) if (typeof v === "string") feeds[k.toUpperCase()] = v;
-        }
-        setState({ markets: h.markets.map((m) => String(m).toUpperCase()), feeds });
-      })
-      .catch(() => undefined); // executor down — keep the safe default
-    return () => { dead = true; };
+    const load = () => {
+      fetch(`${EXECUTOR_URL}/health`)
+        .then((r) => r.json())
+        .then((h: { markets?: unknown; feeds?: unknown }) => {
+          if (dead) return;
+          if (!Array.isArray(h.markets) || h.markets.length === 0) { setState((s) => ({ ...s, reachable: true })); return; } // executor answered — just no markets payload
+          const feeds: Record<string, string> = {};
+          if (h.feeds && typeof h.feeds === "object") {
+            for (const [k, v] of Object.entries(h.feeds as Record<string, unknown>)) if (typeof v === "string") feeds[k.toUpperCase()] = v;
+          }
+          setState({ markets: h.markets.map((m) => String(m).toUpperCase()), feeds, reachable: true });
+        })
+        // executor unreachable/cold — keep last-known markets, flag it so the UI can
+        // say "reconnecting" instead of silently looking like SOL-only is a feature limit.
+        .catch(() => { if (!dead) setState((s) => ({ ...s, reachable: false })); });
+    };
+    load();
+    const t = setInterval(load, 20_000); // recover from a transient blip
+    return () => { dead = true; clearInterval(t); };
   }, []);
   return state;
 }
@@ -331,4 +352,52 @@ export function useTickStats(pda: string | null): TickStats {
   }, [pda]);
 
   return stats;
+}
+
+export interface Tick {
+  signature: string;
+  slot: number;
+  blockTime: number | null;
+  err: boolean;
+}
+
+/** Live scrolling feed of the crank-tick TRANSACTIONS hitting an order PDA on the
+ *  ER — each one links to the MagicBlock explorer. Incremental: every poll fetches
+ *  only signatures newer than the last seen, de-duped, newest-first, capped. Gate
+ *  on a non-null pda (only stream the card/modal that's actually open). */
+export function useTickStream(pda: string | null, max = 24): Tick[] {
+  const [ticks, setTicks] = useState<Tick[]>([]);
+  const seen = useRef<Set<string>>(new Set());
+  const newest = useRef<string | undefined>(undefined);
+
+  useEffect(() => {
+    seen.current = new Set();
+    newest.current = undefined;
+    setTicks([]);
+    if (!pda) return;
+    const key = new PublicKey(pda);
+    const tick = async () => {
+      try {
+        const sigs = await ghostEr.getSignaturesForAddress(
+          key,
+          newest.current ? { until: newest.current, limit: 100 } : { limit: max },
+        );
+        if (sigs.length === 0) return;
+        const fresh = sigs
+          .filter((s) => !seen.current.has(s.signature))
+          .map((s) => ({ signature: s.signature, slot: s.slot, blockTime: s.blockTime ?? null, err: s.err != null }));
+        if (fresh.length === 0) return;
+        for (const f of fresh) seen.current.add(f.signature);
+        newest.current = sigs[0]!.signature; // newest-first
+        setTicks((p) => [...fresh, ...p].slice(0, max));
+      } catch {
+        // keep last on RPC hiccup — same posture as useTickStats
+      }
+    };
+    void tick();
+    const t = setInterval(() => void tick(), 1000);
+    return () => clearInterval(t);
+  }, [pda, max]);
+
+  return ticks;
 }

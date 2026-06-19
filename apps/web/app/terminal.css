@@ -310,6 +310,15 @@
 .gs-terminal .oc-actions{ margin-top:12px; }
 .gs-terminal .oc-onchain{ display:inline-flex; align-items:center; gap:4px; margin-top:10px; font-size:11px; font-weight:800; color:var(--muted); font-family:var(--font-num); text-decoration:none; transition:color .15s; }
 .gs-terminal .oc-onchain:hover{ color:var(--green); }
+.gs-terminal .oc-ticks-toggle{ margin-top:8px; background:none; border:none; color:var(--green); font-size:11px; font-weight:800; font-family:var(--font-num); cursor:pointer; padding:0; }
+.gs-terminal .tick-stream{ list-style:none; margin:6px 0 0; padding:5px; max-height:150px; overflow-y:auto; background:color-mix(in srgb, var(--ink) 5%, transparent); border:2px solid var(--outline); border-radius:var(--r-sm); display:flex; flex-direction:column; gap:2px; }
+.gs-terminal .tick-stream li{ margin:0; }
+.gs-terminal .tick-row{ display:flex; justify-content:space-between; align-items:center; gap:8px; padding:3px 7px; border-radius:6px; text-decoration:none; font-family:var(--font-num); font-size:10.5px; font-weight:700; }
+.gs-terminal .tick-row:hover{ background:color-mix(in srgb, var(--green) 12%, transparent); }
+.gs-terminal .tick-slot{ color:var(--faint); }
+.gs-terminal .tick-sig{ color:var(--green); }
+.gs-terminal .tick-row.tick-err .tick-sig{ color:var(--red); }
+.gs-terminal .tick-empty{ font-size:11px; color:var(--faint); font-weight:700; padding:4px 7px; }
 .gs-terminal .market-search{ width:100%; display:flex; align-items:center; gap:10px; padding:11px 15px; border-radius:var(--r-lg); border:var(--bw) solid var(--outline); background:var(--panel); box-shadow:var(--sh-hard); margin-bottom:4px; }
 .gs-terminal .market-search input{ flex:1; background:none; border:none; outline:none; color:var(--ink); font-family:var(--font-ui); font-weight:700; font-size:15px; }
 .gs-terminal .market-search input::placeholder{ color:var(--faint); }

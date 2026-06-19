@@ -19,7 +19,9 @@ import { OrderCard } from "@/components/gummy/order-card";
 import { enableOneClickTrading, type EnableState, type EnableWalletCtx } from "@/lib/enable";
 import { depositUsdc, executeWithdrawalStep, withdrawUsdc, type FundsStep } from "@/lib/funds";
 import { COLLATERAL, flash, MARKETS } from "@/lib/flash";
-import { computePositionView, explorerLink, FLASH_ER_RPC, fmtMs, fmtPnlUsd, num, shortKey } from "@/lib/format";
+import { computePositionView, explorerLink, FLASH_ER_RPC, GHOST_ER_RPC, fmtMs, fmtPnlUsd, num, shortKey } from "@/lib/format";
+import { playSound, unlockSound } from "@/lib/sound";
+import { useSound } from "@/lib/use-sound";
 import { useBalances, useBasketBalance, useLatencyLog, useLivePrice, useMarketLimits, useMarkets, useOwner, useUsdcMint, type LatencyEntry } from "@/lib/hooks";
 import { loadSession, type LoadedSession } from "@/lib/session";
 import { makeSessionSigner } from "@/lib/signer";
@@ -43,6 +45,8 @@ function Spark({ points, up }: { points: number[]; up: boolean }) {
 const SIZE_DEFAULT = 25; // sensible starter stake (was "11")
 const SIZE_PRESETS = ["10", "25", "50", "100"];
 const TRAIL_PRESETS = [100, 200, 300, 500]; // bps · 1/2/3/5% · default 3% (a real stop, not a hair-trigger)
+const LEV_PRESETS = [2, 5, 10, 20]; // multiplier chips; custom input covers anything in [min, market-max]
+const LIQ_BUFFER = 0.92; // maintenance-margin factor — ONE constant so the chart liq line, Liq cell, the stop-below-liq guard, and computePositionView never disagree
 
 // Plain one-line explainers, shown inline when a "?" is tapped. Teaching the
 // concepts beats relabeling them.
@@ -129,7 +133,7 @@ export default function GummyTerminal() {
   );
 }
 
-type ModalId = "wallet" | "enable" | "funds" | "history" | "settings" | null;
+type ModalId = "wallet" | "enable" | "funds" | "history" | "settings" | "about" | null;
 type DrawerId = "stops" | "markets" | "risk" | null;
 
 function Inner() {
@@ -153,6 +157,7 @@ function Inner() {
   useEffect(() => { setSession(walletPk ? loadSession(walletPk) : null); }, [walletPk]);
   const signer = useMemo(() => {
     if (!anchorWallet || !session || session.authority !== anchorWallet.publicKey.toBase58()) return null;
+    if (session.validUntil <= Date.now() / 1000) return null; // expired 24h session can't sign — drop to "Set up" instead of silently failing a trade
     return makeSessionSigner(anchorWallet, session, flash.network);
   }, [anchorWallet, session]);
 
@@ -165,7 +170,7 @@ function Inner() {
   useEffect(() => {
     try {
       const m = (new URLSearchParams(window.location.search).get("m") || localStorage.getItem("gs-market") || "").toUpperCase();
-      if (m) setMarket(m);
+      if (m && MARKETS.includes(m)) setMarket(m); // ignore unknown/delisted symbols so a bad ?m= can't strand the user on an empty chart
     } catch { /* ignore */ }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   // keep the URL + localStorage in sync → every token has its own shareable link.
@@ -188,7 +193,7 @@ function Inner() {
   const { snapshot, status, refresh } = useOwner(walletPk);
   const usdcMint = useUsdcMint();
   const balances = useBalances(walletPk, usdcMint);
-  const { markets: ghostMarkets, feeds: ghostFeeds } = useGhostMarkets();
+  const { markets: ghostMarkets, feeds: ghostFeeds, reachable: executorUp } = useGhostMarkets();
   // real-time: feed-backed markets read the ER oracle over WS (the exact price
   // the on-chain stop watches); others fall back to fast Flash REST.
   const { price, drift } = useLivePrice(market, ghostFeeds[market.toUpperCase()] ?? null);
@@ -203,10 +208,14 @@ function Inner() {
   const marketPositions = allPositions.filter((p) => p.marketSymbol.toUpperCase() === market.toUpperCase());
   const position = marketPositions[0] ?? null;
   const markUi = price?.priceUi ?? null;
-  const marginInUse = allPositions.reduce((s, p) => s + (num(p.collateralUsdUi) ?? 0), 0);
   const basketExists = Boolean(snapshot?.basketPubkey);
   const enabled = basketExists && Boolean(signer);
-  const freeUsd = basketBal ? Math.max(0, basketBal.inBasketUsd - marginInUse) : null;
+  // inBasketUsd is ALREADY the free/available balance: an open position's
+  // collateral is booked into basket.debits by the protocol ledger, so it's
+  // excluded exactly once. (We used to subtract margin-in-use AGAIN here, which
+  // double-counted open collateral and made the trade panel read less than the
+  // real balance whenever a position was open.)
+  const freeUsd = basketBal ? Math.max(0, basketBal.inBasketUsd) : null;
 
   const basketData = snapshot?.basketData ?? null;
   useEffect(() => { if (basketData) { void balances.refresh(); void refreshBasket(); } }, [basketData, balances.refresh, refreshBasket]);
@@ -243,13 +252,19 @@ function Inner() {
   const [toast, setToast] = useState<string | null>(null);
   const [enabling, setEnabling] = useState(false);
   const [enableState, setEnableState] = useState<EnableState | null>(null);
-  const [notice, setNotice] = useState<{ kind: "fire" | "good" | "bad"; title: string; sub: string } | null>(null);
+  const [notice, setNotice] = useState<{ kind: "fire" | "good" | "bad"; title: string; sub: string; sig?: { signature: string; rpc: string | null } } | null>(null);
   // pending one-tap confirm for irreversible actions (close / reverse)
   const [confirmAct, setConfirmAct] = useState<{ kind: "close" | "reverse"; label: string; run: () => void } | null>(null);
   const [glossary, setGlossary] = useState<string | null>(null); // tappable "?" explainer key
 
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 5000); return () => clearTimeout(t); }, [toast]);
   useEffect(() => { if (!notice) return; const t = setTimeout(() => setNotice(null), 6000); return () => clearTimeout(t); }, [notice]);
+  // unlock the Web Audio context on the first user gesture (browser autoplay policy)
+  useEffect(() => {
+    const unlock = () => { unlockSound(); window.removeEventListener("pointerdown", unlock); };
+    window.addEventListener("pointerdown", unlock, { once: true });
+    return () => window.removeEventListener("pointerdown", unlock);
+  }, []);
   // restore per-coin Protect / trail % / leverage when the token changes
   useEffect(() => {
     try {
@@ -283,9 +298,9 @@ function Inner() {
     for (const o of ghostOrders) {
       const prev = prevStates.current[o.pda];
       if (prev && prev !== o.state) {
-        if (o.state === "fired") { if (typeof navigator !== "undefined") navigator.vibrate?.(15); setNotice({ kind: "fire", title: "Your trailing stop fired ⚡", sub: `${o.market} reversed past your stop — closing the trade to lock in your result.` }); }
-        else if (o.state === "executed") setNotice({ kind: "good", title: "Protected exit ✓", sub: `Your ${o.market} trade was closed automatically by your trailing stop.` });
-        else if (o.state === "failed") setNotice({ kind: "bad", title: "Stop couldn't close the trade", sub: "Your position is untouched — close it manually if you want out." });
+        if (o.state === "fired") { if (typeof navigator !== "undefined") navigator.vibrate?.(15); playSound("fire"); setNotice({ kind: "fire", title: "Your trailing stop fired ⚡", sub: `${o.market} reversed past your stop — closing the trade to lock in your result.` }); }
+        else if (o.state === "executed") { playSound("executed"); setNotice({ kind: "good", title: "Protected exit ✓", sub: `Your ${o.market} trade was closed automatically by your trailing stop.` }); }
+        else if (o.state === "failed") { playSound("error"); setNotice({ kind: "bad", title: "Stop couldn't close the trade", sub: "Your position is untouched — close it manually if you want out." }); }
       }
       prevStates.current[o.pda] = o.state;
     }
@@ -305,6 +320,7 @@ function Inner() {
       if (o.isLong ? stopNow >= entry : stopNow <= entry) {
         lockedRef.current[o.pda] = true;
         if (typeof navigator !== "undefined") navigator.vibrate?.(15);
+        playSound("executed");
         setNotice({ kind: "good", title: "Profit locked 🔒", sub: `${o.market} stop trailed ${o.isLong ? "above" : "below"} your entry $${entry.toFixed(2)} — this trade can't go red now.` });
       }
     }
@@ -363,7 +379,7 @@ function Inner() {
       );
       if (hasPosition) { delete orphanSince.current[o.pda]; orphanHandled.current.delete(o.pda); continue; }
       const since = orphanSince.current[o.pda] ?? (orphanSince.current[o.pda] = now);
-      if (now - since > 15_000 && !orphanHandled.current.has(o.pda)) {
+      if (now - since > 8_000 && !orphanHandled.current.has(o.pda)) {
         orphanHandled.current.add(o.pda);
         void cancelGhostOrder(o.pda).catch(() => undefined);
       }
@@ -387,6 +403,9 @@ function Inner() {
   const openPosition = useCallback(async (side: TradeType) => {
     if (!signer || busySide) return;
     const amt = sizeUsd || String(SIZE_DEFAULT);
+    const n = Number(amt);
+    if (!Number.isFinite(n) || n <= 0) { setToast("Enter an amount greater than $0."); return; }
+    if (freeUsd != null && n > freeUsd + 1e-6) { setToast(`That's more than your $${freeUsd.toFixed(2)} free balance — lower the amount or add USDC.`); return; }
     const willProtect = protectOn && Boolean(walletPk) && stopsSupported(market);
     setBusySide(side);
     try {
@@ -394,27 +413,31 @@ function Inner() {
       if (!q.transactionBase64) throw new Error("no transaction");
       const { signature, confirmMs } = await signer.sendTrade(q.transactionBase64);
       addLog({ action: `${side} ${lev}×`, chain: "er", ms: confirmMs, signature, trade: { market, side, entryUi: markUi, collateralUi: Number(amt) || null, pnlUi: null } });
+      void refresh(); // pull the new position into the snapshot fast so the orphan-stop reconciler can't race a freshly-armed stop
       const dir = side === "LONG" ? "Up" : "Down";
       if (!willProtect) {
-        setNotice({ kind: "good", title: `${dir} bet opened`, sub: `${market} · $${(Number(amt) || 0).toFixed(0)} · ${lev.toFixed(lev < 10 ? 1 : 0)}×${markUi ? ` @ $${markUi.toFixed(2)}` : ""}` });
+        playSound("open");
+        setNotice({ kind: "good", title: `${dir} bet opened`, sub: `${market} · $${(Number(amt) || 0).toFixed(0)} · ${lev.toFixed(lev < 10 ? 1 : 0)}×${markUi ? ` @ $${markUi.toFixed(2)}` : ""}`, sig: { signature, rpc: FLASH_ER_RPC } });
       } else {
         setArmingStop(true);
         try {
           if (!registered && session) await registerSessionWithExecutor(session).then(() => setRegistered(true)).catch(() => undefined);
           await createGhostOrder({ owner: walletPk!, market, kind: "trailing", trailingBps: trailBps, sizePctBps: 10000, isLong: side === "LONG" });
           if (typeof navigator !== "undefined") navigator.vibrate?.(15);
-          setNotice({ kind: "fire", title: `${dir} bet opened & protected ⚡`, sub: `${market} · sells if it falls ${(trailBps / 100).toFixed(trailBps < 100 ? 1 : 0)}% from its peak · watching live` });
+          playSound("open"); playSound("attach");
+          setNotice({ kind: "fire", title: `${dir} bet opened & protected ⚡`, sub: `${market} · sells if it falls ${(trailBps / 100).toFixed(trailBps < 100 ? 1 : 0)}% from its peak · watching live`, sig: { signature, rpc: FLASH_ER_RPC } });
         } catch (e) {
-          setNotice({ kind: "good", title: `${dir} bet opened`, sub: `${market} · couldn't arm the stop — tap “Protect this trade” to retry.` });
+          playSound("open");
+          setNotice({ kind: "good", title: `${dir} bet opened`, sub: `${market} · couldn't arm the stop — tap “Protect this trade” to retry.`, sig: { signature, rpc: FLASH_ER_RPC } });
           setToast(`Trade opened, but arming protection failed: ${errMsg(e)}`);
         } finally { setArmingStop(false); }
       }
-    } catch (e) { setToast(errMsg(e)); }
+    } catch (e) { playSound("error"); setToast(errMsg(e)); }
     finally { setBusySide(null); }
-  }, [signer, busySide, sizeUsd, lev, market, markUi, addLog, protectOn, walletPk, stopsSupported, trailBps, registered, session]);
+  }, [signer, busySide, sizeUsd, lev, market, markUi, addLog, protectOn, walletPk, stopsSupported, trailBps, registered, session, freeUsd, refresh]);
 
   const closePosition = useCallback(async (mkt: string, side: TradeType) => {
-    if (!signer) return;
+    if (!signer || busyPos) return;
     setBusyPos(true);
     try {
       const c = await flash.closePosition({ marketSymbol: mkt, side, inputUsdUi: "0", withdrawTokenSymbol: COLLATERAL, owner: signer.owner, slippagePercentage: "0.5", ...signer.tradeFields });
@@ -426,13 +449,14 @@ function Inner() {
         if (o.state === "active" && o.market.toUpperCase() === mkt.toUpperCase() && o.isLong === (side === "LONG")) void cancelGhostOrder(o.pda).catch(() => undefined);
       }
       const pnl = livePnlRef.current;
-      setNotice({ kind: pnl != null && pnl < 0 ? "bad" : "good", title: pnl != null && pnl < 0 ? "Trade closed" : "Trade closed — nice", sub: `${mkt}${pnl != null ? ` · ${pnl >= 0 ? "you made" : "you lost"} $${Math.abs(pnl).toFixed(2)}` : ""}` });
-    } catch (e) { setToast(errMsg(e)); }
+      playSound("close");
+      setNotice({ kind: pnl != null && pnl < 0 ? "bad" : "good", title: pnl != null && pnl < 0 ? "Trade closed" : "Trade closed — nice", sub: `${mkt}${pnl != null ? ` · ${pnl >= 0 ? "you made" : "you lost"} $${Math.abs(pnl).toFixed(2)}` : ""}`, sig: { signature, rpc: FLASH_ER_RPC } });
+    } catch (e) { playSound("error"); setToast(errMsg(e)); }
     finally { setBusyPos(false); }
-  }, [signer, addLog, ghostOrders]);
+  }, [signer, busyPos, addLog, ghostOrders]);
 
   const reversePosition = useCallback(async (mkt: string, side: TradeType) => {
-    if (!signer) return;
+    if (!signer || busyPos) return;
     setBusyPos(true);
     const newSide: TradeType = side === "LONG" ? "SHORT" : "LONG";
     try {
@@ -444,10 +468,11 @@ function Inner() {
       for (const o of ghostOrders) {
         if (o.state === "active" && o.market.toUpperCase() === mkt.toUpperCase() && o.isLong === (side === "LONG")) void cancelGhostOrder(o.pda).catch(() => undefined);
       }
-      setNotice({ kind: "good", title: `Flipped to ${newSide === "LONG" ? "Up" : "Down"}`, sub: `${mkt}${markUi ? ` @ $${markUi.toFixed(2)}` : ""}` });
-    } catch (e) { setToast(errMsg(e)); }
+      playSound("reverse");
+      setNotice({ kind: "good", title: `Flipped to ${newSide === "LONG" ? "Up" : "Down"}`, sub: `${mkt}${markUi ? ` @ $${markUi.toFixed(2)}` : ""}`, sig: { signature, rpc: FLASH_ER_RPC } });
+    } catch (e) { playSound("error"); setToast(errMsg(e)); }
     finally { setBusyPos(false); }
-  }, [signer, lev, markUi, addLog, ghostOrders]);
+  }, [signer, busyPos, lev, markUi, addLog, ghostOrders]);
 
   const runEnable = useCallback(async () => {
     if (enabling) return;
@@ -468,17 +493,27 @@ function Inner() {
       setToast(`Ghost Stops protects ${ghostMarkets.join(", ")} today — ${position.marketSymbol} has no verified oracle feed yet.`);
       return;
     }
+    // don't arm a stop that sits BELOW liquidation — it could never fire in time.
+    const sz = num(position.sizeUsdUi), col = num(position.collateralUsdUi);
+    const pLev = sz != null && col != null && col > 0 ? sz / col : null;
+    const liqAwayPct = pLev ? (100 / pLev) * LIQ_BUFFER : null;
+    if (liqAwayPct != null && (trailBps / 100) >= liqAwayPct) {
+      setToast(`That ${(trailBps / 100).toFixed(1)}% trail is below your liquidation (~${liqAwayPct.toFixed(1)}% away at ${pLev!.toFixed(0)}×) — you'd be liquidated before it fires. Lower leverage or pick a tighter trail.`);
+      return;
+    }
     setAttaching(true);
     try {
       await createGhostOrder({ owner: walletPk, market: position.marketSymbol, kind: "trailing", trailingBps: trailBps, sizePctBps: 10000, isLong: position.sideUi.toUpperCase() === "LONG" });
+      void refresh();
       if (typeof navigator !== "undefined") navigator.vibrate?.(15);
+      playSound("attach");
       setNotice({ kind: "fire", title: "Protected ⚡", sub: `${position.marketSymbol} · sells if it falls ${(trailBps / 100).toFixed(trailBps < 100 ? 1 : 0)}% from its peak · watching live, ~10× a second` });
       setDrawer("stops");
-    } catch (e) { setToast(errMsg(e)); }
+    } catch (e) { playSound("error"); setToast(errMsg(e)); }
     finally { setAttaching(false); }
-  }, [walletPk, position, attaching, trailBps, stopsSupported, ghostMarkets]);
+  }, [walletPk, position, attaching, trailBps, stopsSupported, ghostMarkets, refresh]);
 
-  const cancelStop = useCallback((pda: string) => { void cancelGhostOrder(pda).catch((e) => setToast(errMsg(e))); }, []);
+  const cancelStop = useCallback((pda: string) => { void cancelGhostOrder(pda).catch((e) => { if (!/404|409|not found|already/i.test(String(e instanceof Error ? e.message : e))) setToast(errMsg(e)); }); }, []);
   /** Jump to a token from a list (stop card, risk list) and close the drawer. */
   const openMarket = useCallback((m: string) => { setMarket(m.toUpperCase()); setDrawer(null); }, []);
   // user-driven trade-pref changes also save per-coin (restored on return).
@@ -493,7 +528,15 @@ function Inner() {
   // "Infinity"/degenerate). Derive them from the trustworthy size/collateral/entry:
   //   leverage = notional / margin ; liq ≈ break-even (entry shifted by 1/leverage).
   const posLev = (() => { const sz = num(position?.sizeUsdUi), col = num(position?.collateralUsdUi); return sz != null && col != null && col > 0 ? sz / col : null; })();
-  const liqUi = (() => { if (!position || posLev == null || posLev <= 0) return null; const entry = num(position.entryPriceUi); return entry == null ? null : posSide === "LONG" ? entry * (1 - 1 / posLev) : entry * (1 + 1 / posLev); })();
+  // liq is independent of mark price — derive it from entry + leverage so it (and
+  // the stop-below-liq safety warning) stays populated through price-feed blips.
+  // LIQ_BUFFER matches computePositionView so the chart, Liq cell, and guard agree.
+  const liqUi = (() => {
+    if (!position || posLev == null || posLev <= 0) return null;
+    const entry = num(position.entryPriceUi);
+    if (entry == null) return null;
+    return posSide === "LONG" ? entry * (1 - (1 / posLev) * LIQ_BUFFER) : entry * (1 + (1 / posLev) * LIQ_BUFFER);
+  })();
   const activeStops = ghostOrders.filter((o) => o.state === "active");
   const protectedNow = activeStops.some((o) => position && o.market === position.marketSymbol && o.isLong === (posSide === "LONG"));
   // open positions (any market) with NO active trailing stop — the "at risk" set.
@@ -510,11 +553,11 @@ function Inner() {
   const sizeNum = Number(sizeUsd) || SIZE_DEFAULT;
   const marketProtectable = stopsSupported(market);
   // approx auto-close move from the multiplier (isolated margin wipes near 1/lev)
-  const liqMovePct = lev > 0 ? Math.round((100 / lev) * 0.9) : 0;
+  const liqMovePct = lev > 0 ? Math.round((100 / lev) * LIQ_BUFFER) : 0;
   // SAFETY: a trailing stop only protects if it fires BEFORE liquidation. The stop
   // sits ~trail% from peak; liq sits ~(1/lev) from entry. If trail ≥ liq distance,
   // you'd be liquidated first and the stop is useless. Warn pre-trade + on-position.
-  const liqAwayPct = lev > 0 ? (100 / lev) * 0.9 : 100;
+  const liqAwayPct = lev > 0 ? (100 / lev) * LIQ_BUFFER : 100;
   const stopBelowLiq = marketProtectable && protectOn && (trailBps / 100) >= liqAwayPct;
   const maxSafeTrailPct = Math.max(0.1, Math.floor(liqAwayPct * 0.8 * 10) / 10);
   // for an OPEN position: is the live stop already on the wrong side of liq?
@@ -605,6 +648,7 @@ function Inner() {
           ) : (
             <button className="seg seg--connect"><span className="btn btn--accent" onClick={() => setModal("wallet")} style={{ boxShadow: "none", border: "none" }}>Connect</span></button>
           )}
+          <button className="seg seg--icon" onClick={() => setModal("about")} title="How it works"><span style={{ fontWeight: 900, fontSize: 16, lineHeight: 1 }}>?</span></button>
           <button className="seg seg--icon" onClick={() => setModal("settings")} title="Settings"><Icon name="gear" size={20} /></button>
         </div>
 
@@ -621,7 +665,7 @@ function Inner() {
             ) : (
               <div className="term-body">
                 <div className="term-head"><span className="term-title disp">Trade {market}</span><button className="term-x" onClick={() => setTermOpen(false)}>–</button></div>
-                <div className="field-cap"><span>amount</span><button onClick={() => freeUsd && setSizeUsd(String(Math.floor(freeUsd * 100) / 100))} className="muted" style={{ background: "none" }}>free ${(freeUsd ?? 0).toFixed(2)}</button></div>
+                <div className="field-cap"><span>amount</span><button onClick={() => freeUsd && setSizeUsd(String(Math.floor(freeUsd * 99) / 100))} className="muted" style={{ background: "none" }} title="Use your free balance (keeps a 1% buffer for fees)">free ${(Math.floor((freeUsd ?? 0) * 99) / 100).toFixed(2)}</button></div>
                 <div className="amount-wrap"><span className="amount-cur">$</span><input className="amount-input" value={sizeUsd} onChange={(e) => setSizeUsd(e.target.value.replace(/[^0-9.]/g, "").replace(/(\..*)\./g, "$1"))} placeholder={String(SIZE_DEFAULT)} inputMode="decimal" /></div>
                 <div className="preset-row">{SIZE_PRESETS.map((p) => <button key={p} className={`preset ${sizeUsd === p ? "on" : ""}`} onClick={() => setSizeUsd(p)}>${p}</button>)}</div>
 
@@ -653,7 +697,11 @@ function Inner() {
                 <div className="lev-block">
                   <div className="field-cap"><span>multiplier <button className="qmark" onClick={() => setGlossary("multiplier")} aria-label="What is the multiplier?">?</button></span><span className="lev-val num">{lev.toFixed(lev < 10 ? 1 : 0)}×</span></div>
                   <input type="range" className="gummy-range" min={limits?.minLeverage ?? 1.1} max={limits?.maxLeverage ?? 100} step={0.1} value={lev} onChange={(e) => chooseLev(Number(e.target.value))} />
-                  <div className="lev-chips">{[2, 5, 10, 20].filter((c) => c <= (limits?.maxLeverage ?? 100)).map((c) => <button key={c} className={`chip ${Math.round(lev) === c ? "on" : ""}`} onClick={() => chooseLev(c)}>{c}×</button>)}</div>
+                  <div className="lev-chips">{LEV_PRESETS.filter((c) => c <= (limits?.maxLeverage ?? 100)).map((c) => <button key={c} className={`chip ${Math.round(lev) === c ? "on" : ""}`} onClick={() => chooseLev(c)}>{c}×</button>)}</div>
+                  <label className={`trail-custom-row ${!LEV_PRESETS.includes(Math.round(lev)) ? "on" : ""}`} title="Set any multiplier">
+                    <span className="trail-custom-lbl">Custom multiplier</span>
+                    <span className="trail-custom-box"><input type="number" min={limits?.minLeverage ?? 1.1} max={limits?.maxLeverage ?? 100} step={0.1} placeholder="2.0" value={LEV_PRESETS.includes(Math.round(lev)) ? "" : lev} onChange={(e) => { const v = Number(e.target.value); if (!Number.isFinite(v) || v <= 0) return; const lo = limits?.minLeverage ?? 1.1, hi = limits?.maxLeverage ?? 100; chooseLev(Math.max(lo, Math.min(hi, Math.round(v * 10) / 10))); }} /><b>×</b></span>
+                  </label>
                   {lev > 10 && <div className="risk-warn">High multiplier — a {liqMovePct}% move against you wipes this trade.</div>}
                 </div>
 
@@ -730,7 +778,8 @@ function Inner() {
           <div className={`notice notice--${notice.kind}`}>
             <Ghost size={34} className="notice-ic" />
             <div style={{ flex: 1 }}><div className="notice-title disp">{notice.title}</div><div className="notice-sub">{notice.sub}</div></div>
-            {notice.kind === "fire" && <button className="notice-view" onClick={() => { setDrawer("stops"); setNotice(null); }}>View</button>}
+            {notice.sig && <a className="notice-view" href={explorerLink(notice.sig.signature, notice.sig.rpc)} target="_blank" rel="noreferrer" title="View this transaction on Solana Explorer">Explorer ↗</a>}
+            {notice.kind === "fire" && !notice.sig && <button className="notice-view" onClick={() => { setDrawer("stops"); setNotice(null); }}>View</button>}
             <button className="notice-x" onClick={() => setNotice(null)}><Icon name="x" size={16} /></button>
           </div>
         )}
@@ -769,7 +818,7 @@ function Inner() {
             <div className="drawer-head"><Ghost size={32} /><span className="drawer-title disp">Ghost Stops</span><button className="drawer-x" onClick={() => setDrawer(null)}>✕</button></div>
             <div className="drawer-body">
               {!enabled && <div className="empty"><Ghost size={70} className="em-ghost" /><div className="em-title disp">Set up to add protection</div><div className="em-sub">Connect, set up your account, then any trade can carry a trailing stop that watches the price for you.</div></div>}
-              {enabled && !registered && <div className="small" style={{ color: "var(--red)", fontWeight: 800 }}>Can&apos;t reach the price watcher right now — stops are paused.</div>}
+              {enabled && !registered && <div className="small" style={{ color: "var(--red)", fontWeight: 800 }}>{executorUp ? "Re-arming your stops — give it a second…" : "Live protection service is reconnecting — your existing stops are safe on-chain and will resume automatically."}</div>}
               {enabled && registered && position && !protectedNow && stopsSupported(position.marketSymbol) && (
                 <div className="order-card">
                   <div className="oc-title" style={{ marginBottom: 12 }}>Protect your {position.marketSymbol} {posSide === "LONG" ? "Up" : "Down"} bet <span className="muted small">(${position.sizeUsdUi})</span></div>
@@ -853,17 +902,20 @@ function Inner() {
       {/* ── modals ── */}
       {modal === "wallet" && <WalletModal onClose={() => setModal(null)} />}
       {modal === "enable" && <EnableModal onClose={() => setModal(null)} state={enableState} enabling={enabling} onRetry={() => void runEnable()} onDeposit={() => setModal("funds")} />}
-      {modal === "funds" && <FundsModal onClose={() => setModal(null)} wallet={enableWallet} usdcMint={usdcMint} walletUsdc={balances.usdc} inBasketUsd={basketBal?.inBasketUsd ?? null} onLog={addLog} onMoved={() => { void refresh(); void balances.refresh(); void refreshBasket(); }} onSuccess={(kind, amt) => {
+      {modal === "funds" && <FundsModal onClose={() => setModal(null)} wallet={enableWallet} usdcMint={usdcMint} walletUsdc={balances.usdc} inBasketUsd={basketBal?.inBasketUsd ?? null} onLog={addLog} onMoved={() => { void refresh(); void balances.refresh(); void refreshBasket(); }} onSuccess={(kind, amt, signature) => {
         const n = Number(amt);
         const usd = Number.isFinite(n) ? `$${n.toFixed(2)}` : "your USDC";
         if (typeof navigator !== "undefined") navigator.vibrate?.(15);
+        playSound("notice");
+        const sig = signature ? { signature, rpc: null } : undefined; // deposits/withdrawals settle on base mainnet
         setNotice(kind === "deposit"
-          ? { kind: "good", title: "Deposit complete ✓", sub: `${usd} added to your trading balance — you're ready to trade.` }
-          : { kind: "good", title: "Withdrawal complete ✓", sub: `${usd} is back in your wallet.` });
+          ? { kind: "good", title: "Deposit complete ✓", sub: `${usd} added to your trading balance — you're ready to trade.`, sig }
+          : { kind: "good", title: "Withdrawal complete ✓", sub: `${usd} is back in your wallet.`, sig });
         setModal(null);
       }} />}
       {modal === "history" && <HistoryModal onClose={() => setModal(null)} entries={entries} walletUsdc={balances.usdc} inBasketUsd={basketBal?.inBasketUsd ?? null} onDisconnect={() => { void walletCtx.disconnect(); setModal(null); }} onFunds={() => setModal("funds")} connected={Boolean(walletPk)} pk={walletPk} />}
       {modal === "settings" && <SettingsModal onClose={() => setModal(null)} theme={theme} setTheme={setTheme} chartStyle={chartStyle} setChartStyle={setChartStyle} density={density} setDensity={setDensity} />}
+      {modal === "about" && <AboutModal onClose={() => setModal(null)} />}
     </div>
   );
 }
@@ -935,7 +987,7 @@ function EnableModal({ onClose, state, enabling, onRetry, onDeposit }: { onClose
   );
 }
 
-function FundsModal({ onClose, wallet, usdcMint, walletUsdc, inBasketUsd, onLog, onMoved, onSuccess }: { onClose: () => void; wallet: EnableWalletCtx | null; usdcMint: string | null; walletUsdc: number | null; inBasketUsd: number | null; onLog: (e: Omit<LatencyEntry, "id" | "at">) => void; onMoved: () => void; onSuccess: (kind: "deposit" | "withdraw", amount: string) => void }) {
+function FundsModal({ onClose, wallet, usdcMint, walletUsdc, inBasketUsd, onLog, onMoved, onSuccess }: { onClose: () => void; wallet: EnableWalletCtx | null; usdcMint: string | null; walletUsdc: number | null; inBasketUsd: number | null; onLog: (e: Omit<LatencyEntry, "id" | "at">) => void; onMoved: () => void; onSuccess: (kind: "deposit" | "withdraw", amount: string, signature?: string) => void }) {
   const [tab, setTab] = useState<"deposit" | "withdraw">("deposit");
   const [amount, setAmount] = useState("25");
   const [busy, setBusy] = useState(false);
@@ -946,10 +998,10 @@ function FundsModal({ onClose, wallet, usdcMint, walletUsdc, inBasketUsd, onLog,
     if (!wallet || !usdcMint || busy || !(Number(amount) > 0)) return;
     const amt = amount;
     setBusy(true); setStep(null); setPending(false);
-    try { const fn = tab === "deposit" ? depositUsdc : withdrawUsdc; const r = await fn({ wallet, usdcMint, amount, onStep: setStep, onLog }); if (r.ok) { onMoved(); onSuccess(tab, amt); } else if ("executePending" in r && r.executePending) setPending(true); }
+    try { const fn = tab === "deposit" ? depositUsdc : withdrawUsdc; const r = await fn({ wallet, usdcMint, amount, onStep: setStep, onLog }); if (r.ok) { onMoved(); onSuccess(tab, amt, r.signature); } else if ("executePending" in r && r.executePending) setPending(true); }
     finally { setBusy(false); }
   };
-  const retry = async () => { if (!wallet || !usdcMint || busy) return; const amt = amount; setBusy(true); try { const r = await executeWithdrawalStep({ wallet, usdcMint, onStep: setStep, onLog }); if (r.ok) { onMoved(); onSuccess("withdraw", amt); setPending(false); } } finally { setBusy(false); } };
+  const retry = async () => { if (!wallet || !usdcMint || busy) return; const amt = amount; setBusy(true); try { const r = await executeWithdrawalStep({ wallet, usdcMint, onStep: setStep, onLog }); if (r.ok) { onMoved(); onSuccess("withdraw", amt, r.signature); setPending(false); } } finally { setBusy(false); } };
   return (
     <ModalShell title="Add or withdraw USDC" sub={tab === "deposit" ? "Move USDC from your wallet into your trading balance. You can withdraw anytime — your funds stay yours." : undefined} onClose={busy ? () => undefined : onClose}>
       <div className="seg-tabs">{(["deposit", "withdraw"] as const).map((t) => <button key={t} className={`dtab ${tab === t ? "on" : ""}`} onClick={() => { setTab(t); setStep(null); setPending(false); }}>{t === "deposit" ? "Add" : "Withdraw"}</button>)}</div>
@@ -1006,8 +1058,14 @@ function HistoryModal({ onClose, entries, walletUsdc, inBasketUsd, onDisconnect,
 }
 
 function SettingsModal({ onClose, theme, setTheme, chartStyle, setChartStyle, density, setDensity }: { onClose: () => void; theme: string; setTheme: (t: string) => void; chartStyle: "line" | "candles"; setChartStyle: (c: "line" | "candles") => void; density: "compact" | "regular" | "comfy"; setDensity: (d: "compact" | "regular" | "comfy") => void }) {
+  const { muted, toggle } = useSound();
   return (
     <ModalShell title="Settings" onClose={onClose}>
+      <div className="section-label">Sound</div>
+      <div className="seg-tabs">
+        <button className={`dtab ${!muted ? "on" : ""}`} onClick={() => muted && toggle()}>On</button>
+        <button className={`dtab ${muted ? "on" : ""}`} onClick={() => !muted && toggle()}>Off</button>
+      </div>
       <div className="section-label">Palette</div>
       <div className="pal-grid">
         {THEMES.map((k) => { const sw = THEME_SW[k]!; return (
@@ -1021,6 +1079,36 @@ function SettingsModal({ onClose, theme, setTheme, chartStyle, setChartStyle, de
       <div className="seg-tabs">{(["line", "candles"] as const).map((c) => <button key={c} className={`dtab ${chartStyle === c ? "on" : ""}`} onClick={() => setChartStyle(c)}>{c[0]!.toUpperCase() + c.slice(1)}</button>)}</div>
       <div className="section-label">Density</div>
       <div className="seg-tabs">{(["compact", "regular", "comfy"] as const).map((d) => <button key={d} className={`dtab ${density === d ? "on" : ""}`} onClick={() => setDensity(d)}>{d[0]!.toUpperCase() + d.slice(1)}</button>)}</div>
+      <div className="section-label">Built on</div>
+      <div className="row" style={{ gap: 16, flexWrap: "wrap", opacity: 0.9 }}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/brand/flash.png" alt="Flash Trade" style={{ height: 16, width: "auto" }} />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/brand/magicblock.svg" alt="MagicBlock" style={{ height: 15, width: "auto" }} />
+      </div>
+    </ModalShell>
+  );
+}
+
+function AboutModal({ onClose }: { onClose: () => void }) {
+  const PROGRAM = "y8gjZcwDHqZ8Sz2Uziw5nxr2cWKGyAKaqtNAUJ2mKxh";
+  const SCHEDULE_SIG = "3UtD1W9DzhLwSju9WAAnSP9xpoc5URT1TVhg2nixdVSPo4j7V4EDukFzdtCz4tyDVnyre54Cy1KP199vkjNDWVS6";
+  return (
+    <ModalShell title="How Ghost Stops works" sub="On-chain trailing stops for Flash Trade V2 perps — non-custodial." onClose={onClose}>
+      <div className="section-label">What's a trailing stop?</div>
+      <div className="need-box"><div className="need-row">It follows your trade's best price: as the market moves your way the trigger ratchets up (or down for shorts) and never gives ground. If price reverses past the distance you set, it closes the trade — locking gains, capping losses. No fixed take-profit; it rides the move and exits on the turn.</div></div>
+      <div className="section-label">The trigger runs on-chain (MagicBlock ER)</div>
+      <div className="need-box"><div className="need-row">Your stop lives inside a MagicBlock <b>Ephemeral Rollup</b>. The rollup&apos;s validator <b>cranks our program ~10× a second (~100ms), fee-free</b> — reading live Pyth Lazer prices and ratcheting your high-water mark on-chain. Every tick is a real, inspectable transaction; no keeper bot, no trust-me server.</div></div>
+      <div className="section-label">Execution on Flash Trade V2</div>
+      <div className="need-box"><div className="need-row">When the stop fires, your real perp position is closed on <b>Flash Trade V2</b> — which itself runs on a MagicBlock ER. Two rollups working together: ours decides, Flash&apos;s executes. ~1s trigger-to-fill.</div></div>
+      <div className="section-label">Non-custodial</div>
+      <div className="need-box"><div className="need-row">One signature mints a scoped <b>session key</b> that can trade but <b>can never withdraw</b> your funds. You approve deposits separately and can revoke anytime.</div></div>
+      <div className="section-label">Verify it on-chain</div>
+      <div className="row" style={{ gap: 14, flexWrap: "wrap", marginBottom: 4 }}>
+        <a className="oc-onchain" href={explorerLink(PROGRAM, GHOST_ER_RPC, "address")} target="_blank" rel="noreferrer">⛓ Our program ↗</a>
+        <a className="oc-onchain" href={explorerLink(SCHEDULE_SIG, GHOST_ER_RPC, "tx")} target="_blank" rel="noreferrer">⛓ Crank schedule tx ↗</a>
+        <a className="oc-onchain" href="https://github.com/Magicianhax/ghost-stops" target="_blank" rel="noreferrer">⛓ GitHub ↗</a>
+      </div>
       <div className="section-label">Built on</div>
       <div className="row" style={{ gap: 16, flexWrap: "wrap", opacity: 0.9 }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}

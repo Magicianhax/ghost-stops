@@ -52,7 +52,7 @@ export async function depositToken(args: {
   amount: string; // UI units, user-chosen
   onStep: OnStep;
   onLog: OnLog;
-}): Promise<{ ok: boolean; error?: string }> {
+}): Promise<{ ok: boolean; error?: string; signature?: string }> {
   const { wallet, tokenMint, symbol, amount, onStep, onLog } = args;
   const owner = wallet.publicKey.toBase58();
   const label = `deposit ${amount} ${symbol}`;
@@ -61,7 +61,7 @@ export async function depositToken(args: {
     const built = await flash.depositDirect({ owner, tokenMint, amount });
     const { signature, ms } = await signSubmit(wallet, built.transactionBase64, label, onStep, onLog);
     onStep({ phase: "done", label, note: "deposited — tradable once it confirms on the rollup", signature, ms });
-    return { ok: true };
+    return { ok: true, signature };
   } catch (e) {
     const c = classifyTxError(e);
     onStep({ phase: "error", label, note: c.message });
@@ -76,7 +76,7 @@ export async function depositUsdc(args: {
   amount: string;
   onStep: OnStep;
   onLog: OnLog;
-}): Promise<{ ok: boolean; error?: string }> {
+}): Promise<{ ok: boolean; error?: string; signature?: string }> {
   return depositToken({ wallet: args.wallet, tokenMint: args.usdcMint, symbol: "USDC", amount: args.amount, onStep: args.onStep, onLog: args.onLog });
 }
 
@@ -99,7 +99,7 @@ export async function withdrawToken(args: {
   amount: string; // UI units, user-chosen
   onStep: OnStep;
   onLog: OnLog;
-}): Promise<{ ok: boolean; error?: string; executePending?: boolean }> {
+}): Promise<{ ok: boolean; error?: string; executePending?: boolean; signature?: string }> {
   const { wallet, tokenMint, symbol, amount, onStep, onLog } = args;
   const owner = wallet.publicKey.toBase58();
   try {
@@ -132,7 +132,7 @@ export async function withdrawUsdc(args: {
   amount: string;
   onStep: OnStep;
   onLog: OnLog;
-}): Promise<{ ok: boolean; error?: string; executePending?: boolean }> {
+}): Promise<{ ok: boolean; error?: string; executePending?: boolean; signature?: string }> {
   return withdrawToken({ wallet: args.wallet, tokenMint: args.usdcMint, symbol: "USDC", amount: args.amount, onStep: args.onStep, onLog: args.onLog });
 }
 
@@ -179,7 +179,7 @@ export async function executeWithdrawalToken(args: {
   onStep: OnStep;
   onLog: OnLog;
   attempt?: number;
-}): Promise<{ ok: boolean; error?: string; executePending?: boolean }> {
+}): Promise<{ ok: boolean; error?: string; executePending?: boolean; signature?: string }> {
   const { wallet, tokenMint, onStep, onLog, attempt } = args;
   const owner = wallet.publicKey.toBase58();
   const tag = attempt ? ` (attempt ${attempt}/4)` : "";
@@ -188,7 +188,7 @@ export async function executeWithdrawalToken(args: {
     const exec = await flash.executeWithdrawal({ owner, tokenMint });
     const { signature, ms } = await signSubmit(wallet, exec.transactionBase64, "execute-withdrawal", onStep, onLog);
     onStep({ phase: "done", label: "execute withdrawal", note: "funds are back in your wallet", signature, ms });
-    return { ok: true };
+    return { ok: true, signature };
   } catch (e) {
     const raw = e instanceof Error ? e.message : String(e);
     if (RE_SETTLEMENT_PENDING.test(raw)) {
@@ -213,6 +213,6 @@ export async function executeWithdrawalStep(args: {
   onStep: OnStep;
   onLog: OnLog;
   attempt?: number;
-}): Promise<{ ok: boolean; error?: string; executePending?: boolean }> {
+}): Promise<{ ok: boolean; error?: string; executePending?: boolean; signature?: string }> {
   return executeWithdrawalToken({ wallet: args.wallet, tokenMint: args.usdcMint, symbol: "USDC", onStep: args.onStep, onLog: args.onLog, ...(args.attempt !== undefined ? { attempt: args.attempt } : {}) });
 }

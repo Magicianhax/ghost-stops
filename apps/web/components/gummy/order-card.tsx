@@ -5,8 +5,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ghostStopLevel, rawToUi, useTickStats, type GhostOrder } from "@/lib/ghost";
+import { ghostStopLevel, rawToUi, useTickStats, useTickStream, type GhostOrder } from "@/lib/ghost";
 import { explorerLink, GHOST_ER_RPC, shortKey } from "@/lib/format";
+import { playSound } from "@/lib/sound";
 
 const PILL: Record<GhostOrder["state"], { cls: string; text: string }> = {
   active: { cls: "st-trailing", text: "trailing" },
@@ -21,6 +22,16 @@ const usd = (raw: number) => `$${rawToUi(raw).toLocaleString("en-US", { minimumF
 export function OrderCard({ order, markUi, entryUi = null, onCancel, onOpen }: { order: GhostOrder; markUi: number | null; entryUi?: number | null; onCancel: (pda: string) => void; onOpen?: (market: string) => void }) {
   const ticks = useTickStats(order.state === "active" ? order.pda : null);
   const [cancelling, setCancelling] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const stream = useTickStream(expanded && order.state === "active" ? order.pda : null);
+  // never leave the Cancel spinner stuck if the cancel fails (404/network) and the
+  // order stays active — a successful cancel re-renders the card into its
+  // non-active branch before this fires anyway.
+  useEffect(() => {
+    if (!cancelling) return;
+    const t = setTimeout(() => setCancelling(false), 6000);
+    return () => clearTimeout(t);
+  }, [cancelling]);
   // flash the peak/stop the moment the high-water mark makes a favorable new
   // extreme — the visible "it just trailed" beat.
   const [trailed, setTrailed] = useState(false);
@@ -30,6 +41,7 @@ export function OrderCard({ order, markUi, entryUi = null, onCancel, onOpen }: {
     prevHwm.current = order.highWaterMark;
     if (!advanced || order.state !== "active") return;
     setTrailed(true);
+    playSound("trail");
     const t = setTimeout(() => setTrailed(false), 900);
     return () => clearTimeout(t);
   }, [order.highWaterMark, order.isLong, order.state]);
@@ -68,6 +80,23 @@ export function OrderCard({ order, markUi, entryUi = null, onCancel, onOpen }: {
             <span>watching live, on-chain</span>
             <span className="eval-count">{ticks.count >= 1000 ? "1000+" : ticks.count} checks {ticks.perSecond > 0 ? `· ${ticks.perSecond.toFixed(0)}/s` : ""}</span>
           </div>
+          <button className="oc-ticks-toggle" onClick={(e) => { e.stopPropagation(); setExpanded((v) => !v); }}>
+            {expanded ? "hide live ticks ▲" : "show live ticks ↗"}
+          </button>
+          {expanded && (
+            <ul className="tick-stream" onClick={(e) => e.stopPropagation()}>
+              {stream.length === 0
+                ? <li className="tick-empty">waiting for the next on-chain tick…</li>
+                : stream.map((t) => (
+                  <li key={t.signature}>
+                    <a href={explorerLink(t.signature, GHOST_ER_RPC, "tx")} target="_blank" rel="noreferrer" className={t.err ? "tick-row tick-err" : "tick-row"}>
+                      <span className="tick-slot">tick · slot {t.slot}</span>
+                      <span className="tick-sig">{shortKey(t.signature, 5)} ↗</span>
+                    </a>
+                  </li>
+                ))}
+            </ul>
+          )}
           <div className="oc-actions">
             <button className="btn btn--ghost btn--block" disabled={cancelling} onClick={(e) => { e.stopPropagation(); setCancelling(true); onCancel(order.pda); }}>
               {cancelling ? "Cancelling…" : "Cancel stop"}
