@@ -989,13 +989,15 @@ function EnableModal({ onClose, state, enabling, onRetry, onDeposit }: { onClose
 
 function FundsModal({ onClose, wallet, usdcMint, walletUsdc, inBasketUsd, onLog, onMoved, onSuccess }: { onClose: () => void; wallet: EnableWalletCtx | null; usdcMint: string | null; walletUsdc: number | null; inBasketUsd: number | null; onLog: (e: Omit<LatencyEntry, "id" | "at">) => void; onMoved: () => void; onSuccess: (kind: "deposit" | "withdraw", amount: string, signature?: string) => void }) {
   const [tab, setTab] = useState<"deposit" | "withdraw">("deposit");
-  const [amount, setAmount] = useState("25");
+  const [amount, setAmount] = useState(""); // empty by default — never pre-fill an amount the user may not have
   const [busy, setBusy] = useState(false);
   const [step, setStep] = useState<FundsStep | null>(null);
   const [pending, setPending] = useState(false);
   const max = tab === "deposit" ? walletUsdc : inBasketUsd;
+  const n = Number(amount) || 0;
+  const over = max != null && n > max + 1e-6; // typed more than is available
   const run = async () => {
-    if (!wallet || !usdcMint || busy || !(Number(amount) > 0)) return;
+    if (!wallet || !usdcMint || busy || !(n > 0) || over) return;
     const amt = amount;
     setBusy(true); setStep(null); setPending(false);
     try { const fn = tab === "deposit" ? depositUsdc : withdrawUsdc; const r = await fn({ wallet, usdcMint, amount, onStep: setStep, onLog }); if (r.ok) { onMoved(); onSuccess(tab, amt, r.signature); } else if ("executePending" in r && r.executePending) setPending(true); }
@@ -1008,8 +1010,9 @@ function FundsModal({ onClose, wallet, usdcMint, walletUsdc, inBasketUsd, onLog,
       <div className="field-cap" style={{ marginTop: 4 }}><span>amount</span><button className="muted" style={{ background: "none" }} onClick={() => max && setAmount(String(Math.floor(max * 100) / 100))}>{tab === "deposit" ? "in your wallet" : "ready to trade"} ${(max ?? 0).toFixed(2)}</button></div>
       <div className="big-input"><span className="cur">$</span><input value={amount} disabled={busy} onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, "").replace(/(\..*)\./g, "$1"))} placeholder="0" inputMode="decimal" /><span className="muted" style={{ fontWeight: 800, fontSize: 13 }}>USDC</span></div>
       {step && <div className="small" style={{ color: step.phase === "error" ? "var(--red)" : "var(--muted)", fontWeight: 700 }}>{step.note ?? step.label}</div>}
+      {over && <div className="small" style={{ color: "var(--red)", fontWeight: 800 }}>Not enough {tab === "deposit" ? "USDC in your wallet" : "in your trading balance"} — you have ${(max ?? 0).toFixed(2)}.</div>}
       {pending ? <button className="btn btn--primary btn--block" disabled={busy} onClick={() => void retry()}>{busy ? "…" : "Try again"}</button>
-        : <button className="btn btn--primary btn--block" disabled={busy || !(Number(amount) > 0) || !wallet} onClick={() => void run()}>{busy ? "…" : tab === "deposit" ? `Add $${Number(amount) > 0 ? Number(amount).toFixed(0) : ""} USDC` : "Withdraw USDC"}</button>}
+        : <button className="btn btn--primary btn--block" disabled={busy || !(n > 0) || over || !wallet} onClick={() => void run()}>{busy ? "…" : over ? "Not enough USDC" : tab === "deposit" ? `Add $${n > 0 ? n.toFixed(0) : ""} USDC` : "Withdraw USDC"}</button>}
     </ModalShell>
   );
 }
