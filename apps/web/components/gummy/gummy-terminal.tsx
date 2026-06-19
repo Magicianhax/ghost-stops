@@ -558,7 +558,10 @@ function Inner() {
   const priceTxt = price ? price.priceUi.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "—";
   const enableWallet: EnableWalletCtx | null = walletCtx.publicKey && walletCtx.signTransaction ? { publicKey: walletCtx.publicKey, signTransaction: walletCtx.signTransaction, signAllTransactions: walletCtx.signAllTransactions } : null;
   const phase = !walletPk ? "connect" : !signedIn ? "signin" : !enabled ? "enable" : (basketBal !== null && basketBal.inBasketUsd < 0.01) ? "deposit" : position ? "position" : "flat";
-  const tour = useTour(phase); // first-run guided tour (fires once when the ticket first appears)
+  // fire the tour only once the user is genuinely set up AND the basket balance has
+  // loaded — phase momentarily reads "flat" while basketBal is still null during
+  // onboarding, which was popping the tour before "Set up your account" finished.
+  const tour = useTour(phase === "flat" && basketBal !== null);
   // keyboard: Escape skips the tour while it runs, else closes any open surface.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

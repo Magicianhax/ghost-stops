@@ -18,7 +18,7 @@ export interface TourApi {
   start: () => void;
 }
 
-export function useTour(phase: string): TourApi {
+export function useTour(ready: boolean): TourApi {
   const [active, setActive] = useState(false);
   const [index, setIndex] = useState(0);
   const firedRef = useRef(false);
@@ -32,14 +32,17 @@ export function useTour(phase: string): TourApi {
   const next = useCallback(() => setIndex((i) => { if (i + 1 >= total) { finish(); return i; } return i + 1; }), [total, finish]);
   const back = useCallback(() => setIndex((i) => Math.max(0, i - 1)), []);
 
-  // first-run: fire exactly once, the moment the trade ticket first exists
-  // (phase "flat") — earlier and half the steps' targets aren't in the DOM yet.
+  // first-run: fire exactly once, the moment the user is genuinely set up and
+  // sitting on a funded, ready-to-trade ticket. `ready` must exclude the brief
+  // onboarding window where phase flickers to "flat" before the balance loads —
+  // otherwise the tour pops up mid-setup. (Also, half the steps' targets only
+  // exist once the trade ticket is rendered.)
   useEffect(() => {
-    if (phase !== "flat" || firedRef.current) return;
+    if (!ready || firedRef.current) return;
     let done = false;
     try { done = localStorage.getItem(TOUR_DONE_KEY) === "1"; } catch { /* treat as not-done */ }
     if (!done) { firedRef.current = true; setIndex(0); setActive(true); }
-  }, [phase]);
+  }, [ready]);
 
   // keyboard: ← / → walk; Esc is handled by the page's global handler (gated on active)
   useEffect(() => {
