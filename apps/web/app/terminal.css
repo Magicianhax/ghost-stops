@@ -349,7 +349,12 @@
 .gs-terminal .hist-label{ font-weight:700; font-size:14px; flex:1; }
 .gs-terminal .hist-sig{ font-size:11px; color:var(--faint); font-family:var(--font-num); cursor:pointer; }
 .gs-terminal .hist-sig:hover{ color:var(--green); }
-.gs-terminal .hist-time{ font-size:11px; color:var(--muted); font-family:var(--font-num); }
+.gs-terminal .hist-time{ font-size:11px; color:var(--muted); font-family:var(--font-num); flex:0 0 auto; }
+.gs-terminal a.hist-row--link{ text-decoration:none; border-radius:8px; transition:background .12s; }
+.gs-terminal a.hist-row--link:hover{ background:color-mix(in srgb, var(--green) 9%, transparent); }
+.gs-terminal a.hist-row--link:hover .hist-sig{ color:var(--green); }
+.gs-terminal .hist-note{ font-size:11px; font-weight:800; color:var(--faint); text-transform:uppercase; letter-spacing:.04em; padding:2px 2px 8px; }
+.gs-terminal .hist-foot{ font-size:11px; font-weight:700; color:var(--faint); padding:12px 2px 2px; line-height:1.5; }
 .gs-terminal .empty{ display:flex; flex-direction:column; align-items:center; gap:12px; text-align:center; padding:40px 20px; color:var(--muted); }
 .gs-terminal .empty .em-title{ font-family:var(--font-disp); font-weight:800; font-size:18px; color:var(--ink); }
 .gs-terminal .empty .em-sub{ font-size:13px; max-width:240px; line-height:1.5; }

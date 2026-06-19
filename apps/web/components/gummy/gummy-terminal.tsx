@@ -26,7 +26,7 @@ import { useBalances, useBasketBalance, useLatencyLog, useLivePrice, useMarketLi
 import { loadSession, type LoadedSession } from "@/lib/session";
 import { makeSessionSigner } from "@/lib/signer";
 import { usePriceHistory } from "@/lib/use-price-history";
-import { cancelGhostOrder, clearAuthToken, createGhostOrder, ghostStopLevel, hasAuthToken, rawToUi, registerSessionWithExecutor, signInWithExecutor, useGhostMarkets, useGhostOrders, useLatestCrankSig } from "@/lib/ghost";
+import { cancelGhostOrder, clearAuthToken, createGhostOrder, ghostStopLevel, hasAuthToken, rawToUi, registerSessionWithExecutor, signInWithExecutor, useGhostMarkets, useGhostOrders, useLatestCrankSig, useOnchainHistory, type ChainTx } from "@/lib/ghost";
 import { useMarketStats, type MarketStat } from "@/lib/market-stats";
 import "@/app/terminal.css";
 
@@ -47,6 +47,15 @@ const SIZE_PRESETS = ["10", "25", "50", "100"];
 const TRAIL_PRESETS = [100, 200, 300, 500]; // bps · 1/2/3/5% · default 3% (a real stop, not a hair-trigger)
 const LEV_PRESETS = [2, 5, 10, 20]; // multiplier chips; custom input covers anything in [min, market-max]
 const LIQ_BUFFER = 0.92; // maintenance-margin factor — ONE constant so the chart liq line, Liq cell, the stop-below-liq guard, and computePositionView never disagree
+
+function timeAgo(blockTimeSec: number | null): string {
+  if (!blockTimeSec) return "";
+  const s = Math.max(0, Math.floor(Date.now() / 1000 - blockTimeSec));
+  if (s < 60) return `${s}s ago`;
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  return `${Math.floor(s / 86400)}d ago`;
+}
 
 // Plain one-line explainers, shown inline when a "?" is tapped. Teaching the
 // concepts beats relabeling them.
@@ -138,7 +147,7 @@ export default function GummyTerminal() {
 }
 
 type ModalId = "wallet" | "enable" | "funds" | "history" | "settings" | "about" | null;
-type DrawerId = "stops" | "markets" | "risk" | null;
+type DrawerId = "stops" | "markets" | "risk" | "history" | null;
 
 function Inner() {
   const walletCtx = useWallet();
@@ -227,6 +236,9 @@ function Inner() {
   const [modal, setModal] = useState<ModalId>(null);
   const [drawer, setDrawer] = useState<DrawerId>(null);
   const marketStats = useMarketStats(drawer === "markets");
+  const chainHistory = useOnchainHistory(snapshot?.basketPubkey ?? null, drawer === "history");
+  // enrich on-chain rows with this browser's labeled log (action · market · PnL) by signature
+  const localBySig = useMemo(() => { const m = new Map<string, LatencyEntry>(); for (const e of entries) if (e.signature) m.set(e.signature, e); return m; }, [entries]);
   // markets dropdown is anchored under the pair pill (left:0); measure the pill so
   // the popover width can't overflow the viewport on narrow screens.
   const marketWrapRef = useRef<HTMLDivElement | null>(null);
@@ -632,6 +644,7 @@ function Inner() {
           </div>
           <div className="spacer" />
           <button className="seg seg-btn" onClick={() => setDrawer("stops")}><Icon name="pulse" className="gi" /><span className="seg-label">Stops</span>{activeStops.length > 0 && <span className="badge live">{activeStops.length}</span>}</button>
+          {walletPk && <button className="seg seg-btn" onClick={() => setDrawer("history")} title="Your trades & fund moves, on-chain"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className="gi"><circle cx="12" cy="12" r="9" /><path d="M12 7.5V12l3 1.8" /></svg><span className="seg-label">History</span></button>}
           {unprotectedPositions.length > 0 && (
             <button className="seg seg--risk" onClick={() => setDrawer("risk")} title="Open trades with no stop"><Icon name="alert" size={16} /><span className="seg-label">{unprotectedPositions.length} unprotected</span></button>
           )}
@@ -652,7 +665,7 @@ function Inner() {
           ) : (
             <button className="seg seg--connect"><span className="btn btn--accent" onClick={() => setModal("wallet")} style={{ boxShadow: "none", border: "none" }}>Connect</span></button>
           )}
-          <button className="seg seg--icon" onClick={() => setModal("about")} title="How it works"><span style={{ fontWeight: 900, fontSize: 16, lineHeight: 1 }}>?</span></button>
+          <button className="seg seg-btn" onClick={() => setModal("about")} title="How Ghost Stops works"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className="gi"><circle cx="12" cy="12" r="9" /><line x1="12" y1="11" x2="12" y2="16" /><circle cx="12" cy="7.6" r="0.6" fill="currentColor" stroke="none" /></svg><span className="seg-label">How it works</span></button>
           <button className="seg seg--icon" onClick={() => setModal("settings")} title="Settings"><Icon name="gear" size={20} /></button>
         </div>
 
@@ -896,6 +909,47 @@ function Inner() {
                       </div>
                     );
                   })}
+                </>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+
+      {drawer === "history" && (
+        <>
+          <div className="scrim" onClick={() => setDrawer(null)} />
+          <div className="drawer">
+            <div className="drawer-head">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M12 7.5V12l3 1.8" /></svg>
+              <span className="drawer-title disp">History</span><button className="drawer-x" onClick={() => setDrawer(null)}>✕</button>
+            </div>
+            <div className="drawer-body">
+              {!walletPk ? (
+                <div className="empty"><Ghost size={70} className="em-ghost" /><div className="em-title disp">Connect to see your history</div><div className="em-sub">Your trades and fund moves, read straight from the chain.</div></div>
+              ) : !snapshot?.basketPubkey ? (
+                <div className="empty"><Ghost size={70} className="em-ghost" /><div className="em-title disp">No on-chain activity yet</div><div className="em-sub">Set up your account and make a trade — it&apos;ll show up here, on any device.</div></div>
+              ) : (
+                <>
+                  <div className="hist-note">On-chain · tied to your wallet · shows on any device</div>
+                  {chainHistory.loading && chainHistory.items.length === 0 ? (
+                    <div className="muted small" style={{ fontWeight: 700, padding: "10px 2px" }}>Loading your on-chain history…</div>
+                  ) : chainHistory.items.length === 0 ? (
+                    <div className="muted small" style={{ fontWeight: 700, padding: "10px 2px" }}>No transactions found yet.</div>
+                  ) : chainHistory.items.map((tx: ChainTx) => {
+                    const local = localBySig.get(tx.signature);
+                    const pnl = local?.trade?.pnlUi ?? null;
+                    const label = local ? `${local.action}${local.trade?.market ? ` · ${local.trade.market}` : ""}` : tx.source === "trade" ? "Trade" : "Deposit / withdrawal";
+                    return (
+                      <a key={tx.signature} className="hist-row hist-row--link" href={explorerLink(tx.signature, tx.source === "trade" ? FLASH_ER_RPC : null, "tx")} target="_blank" rel="noreferrer" title="View this transaction on Solana Explorer">
+                        <span className={`hist-dot ${tx.err ? "hd-bad" : tx.source === "trade" ? "hd-good" : "hd-info"}`} />
+                        <span className="hist-label">{label}{tx.err ? " · failed" : ""}{pnl != null && <b style={{ marginLeft: 6, color: pnl < 0 ? "var(--red)" : "var(--green)" }}>{pnl >= 0 ? "+" : "−"}${Math.abs(pnl).toFixed(2)}</b>}</span>
+                        <span className="hist-sig">{shortKey(tx.signature)} ↗</span>
+                        <span className="hist-time">{timeAgo(tx.blockTime)}</span>
+                      </a>
+                    );
+                  })}
+                  <div className="hist-foot">Trades settle on the Flash ER · deposits/withdrawals on Solana mainnet.</div>
                 </>
               )}
             </div>

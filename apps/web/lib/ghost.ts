@@ -422,3 +422,45 @@ export function useLatestCrankSig(enabled: boolean): string | null {
   }, [enabled]);
   return sig;
 }
+
+// Trades live on Flash's ER; deposits/withdrawals on base mainnet. Separate
+// read-only connections (inlined env — FLASH_ER_RPC for trades, base RPC for
+// funds — avoids a flash.ts import cycle) so the History panel can pull the
+// wallet's real on-chain activity from ANY device, not just this browser's log.
+const flashErConn = new Connection(process.env.NEXT_PUBLIC_ER_RPC ?? "https://flash.magicblock.xyz", { commitment: "confirmed" });
+const baseConn = new Connection(process.env.NEXT_PUBLIC_BASE_RPC ?? "https://solana-rpc.publicnode.com", { commitment: "confirmed" });
+
+export interface ChainTx { signature: string; slot: number; blockTime: number | null; err: boolean; source: "trade" | "fund" }
+
+/** Wallet-bound on-chain history for the History side panel: the basket's recent
+ *  signatures on the Flash ER (trades) + base mainnet (deposits/withdrawals),
+ *  merged newest-first. Fetches only while `open` so closed panels cost nothing. */
+export function useOnchainHistory(basket: string | null, open: boolean): { items: ChainTx[]; loading: boolean } {
+  const [items, setItems] = useState<ChainTx[]>([]);
+  const [loading, setLoading] = useState(false);
+  useEffect(() => {
+    if (!open || !basket) { setItems([]); setLoading(false); return; }
+    let dead = false;
+    let key: PublicKey;
+    try { key = new PublicKey(basket); } catch { setItems([]); setLoading(false); return; }
+    setLoading(true);
+    void (async () => {
+      try {
+        const [trades, funds] = await Promise.all([
+          flashErConn.getSignaturesForAddress(key, { limit: 40 }).catch(() => []),
+          baseConn.getSignaturesForAddress(key, { limit: 25 }).catch(() => []),
+        ]);
+        if (dead) return;
+        const tag = (arr: { signature: string; slot: number; blockTime?: number | null; err: unknown }[], source: "trade" | "fund"): ChainTx[] =>
+          arr.map((s) => ({ signature: s.signature, slot: s.slot, blockTime: s.blockTime ?? null, err: s.err != null, source }));
+        const merged = [...tag(trades, "trade"), ...tag(funds, "fund")]
+          .sort((a, b) => (b.blockTime ?? 0) - (a.blockTime ?? 0))
+          .slice(0, 60);
+        setItems(merged);
+      } catch { if (!dead) setItems([]); }
+      finally { if (!dead) setLoading(false); }
+    })();
+    return () => { dead = true; };
+  }, [basket, open]);
+  return { items, loading };
+}
