@@ -340,7 +340,14 @@ export async function enableOneClickTrading(args: {
       }
     } catch (e) {
       const raw = errText(e);
-      if (RE_ALREADY.test(raw)) {
+      // Existing Flash account → the re-create step is a no-op, so skip it. 0x0 /
+      // 0x1900 are unambiguous "already exists"; 0x1 (basket/delegate already
+      // there) is only safe to skip on an account-creation step that did NOT fail
+      // for lack of SOL — the System Program also reports 0x1 as "insufficient
+      // funds", which must surface, not be swallowed.
+      const outOfSol = /insufficient lamports/i.test(raw);
+      const reinitStep = p.id === "basket" || p.id === "ledger" || p.id === "delegate";
+      if (!outOfSol && (RE_ALREADY.test(raw) || (reinitStep && /custom program error: 0x1\b/i.test(raw)))) {
         row(p.id, p.label, { status: "done", note: "already set up" });
         continue;
       }
@@ -350,7 +357,7 @@ export async function enableOneClickTrading(args: {
       }
       const friendly = RE_STALE.test(raw)
         ? "the approval took too long and the transaction expired — tap Enable again to rebuild"
-        : raw;
+        : classifyTxError(e).message;
       row(p.id, p.label, { status: "error", note: friendly });
       return stop(friendly);
     }
