@@ -101,6 +101,11 @@ export function classifyTxError(e: unknown): {
     const need = Math.max(0.01, Math.ceil(((Number(lamports[2]) - Number(lamports[1])) / 1e9 + 0.003) * 1000) / 1000);
     return { message: `your wallet needs ~${need.toFixed(3)} more SOL to cover network rent — add a little SOL and try again (your funds are safe)`, upstream: false, stale: false, rejected: false };
   }
+  // System Program reports a zero-SOL / never-funded fee payer as "debit an account
+  // but found no record of a prior credit" (no exact lamport figure in this case).
+  if (/debit an account but found no record|attempt to debit|prior credit/i.test(raw)) {
+    return { message: "your wallet has no SOL to pay the network fee — add ~0.01 SOL and try again (your funds are safe)", upstream: false, stale: false, rejected: false };
+  }
   if (RE_UPSTREAM.test(raw)) return { message: UPSTREAM_MESSAGE, upstream: true, stale: false, rejected: false };
   if (RE_REJECTED.test(raw))
     return { message: "approval declined in the wallet — nothing was sent", upstream: false, stale: false, rejected: true };

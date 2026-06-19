@@ -94,6 +94,10 @@ function errMsg(e: unknown): string {
     const need = Math.max(0.01, Math.ceil((gap + 0.003) * 1000) / 1000);
     return `Almost there — your wallet needs ~${need.toFixed(3)} more SOL to cover network rent. Add a little SOL and try again. Your funds are safe.`;
   }
+  // zero-SOL / never-funded fee payer (System Program message, no lamport figure)
+  if (/debit an account but found no record|attempt to debit|prior credit/i.test(raw)) {
+    return "Your wallet has no SOL to pay the network fee — add ~0.01 SOL and try again. Your funds are safe.";
+  }
   // Decode Anchor custom on-chain errors (JSON "Custom": N, or raw "0x..hex") to
   // plain language instead of leaking the simulation log.
   const custom = raw.match(/"Custom":\s*(\d+)/);
@@ -902,7 +906,7 @@ function Inner() {
       {/* ── modals ── */}
       {modal === "wallet" && <WalletModal onClose={() => setModal(null)} />}
       {modal === "enable" && <EnableModal onClose={() => setModal(null)} state={enableState} enabling={enabling} onRetry={() => void runEnable()} onDeposit={() => setModal("funds")} />}
-      {modal === "funds" && <FundsModal onClose={() => setModal(null)} wallet={enableWallet} usdcMint={usdcMint} walletUsdc={balances.usdc} inBasketUsd={basketBal?.inBasketUsd ?? null} onLog={addLog} onMoved={() => { void refresh(); void balances.refresh(); void refreshBasket(); }} onSuccess={(kind, amt, signature) => {
+      {modal === "funds" && <FundsModal onClose={() => setModal(null)} wallet={enableWallet} usdcMint={usdcMint} walletUsdc={balances.usdc} walletSol={balances.sol} inBasketUsd={basketBal?.inBasketUsd ?? null} onLog={addLog} onMoved={() => { void refresh(); void balances.refresh(); void refreshBasket(); }} onSuccess={(kind, amt, signature) => {
         const n = Number(amt);
         const usd = Number.isFinite(n) ? `$${n.toFixed(2)}` : "your USDC";
         if (typeof navigator !== "undefined") navigator.vibrate?.(15);
@@ -987,7 +991,7 @@ function EnableModal({ onClose, state, enabling, onRetry, onDeposit }: { onClose
   );
 }
 
-function FundsModal({ onClose, wallet, usdcMint, walletUsdc, inBasketUsd, onLog, onMoved, onSuccess }: { onClose: () => void; wallet: EnableWalletCtx | null; usdcMint: string | null; walletUsdc: number | null; inBasketUsd: number | null; onLog: (e: Omit<LatencyEntry, "id" | "at">) => void; onMoved: () => void; onSuccess: (kind: "deposit" | "withdraw", amount: string, signature?: string) => void }) {
+function FundsModal({ onClose, wallet, usdcMint, walletUsdc, walletSol, inBasketUsd, onLog, onMoved, onSuccess }: { onClose: () => void; wallet: EnableWalletCtx | null; usdcMint: string | null; walletUsdc: number | null; walletSol: number | null; inBasketUsd: number | null; onLog: (e: Omit<LatencyEntry, "id" | "at">) => void; onMoved: () => void; onSuccess: (kind: "deposit" | "withdraw", amount: string, signature?: string) => void }) {
   const [tab, setTab] = useState<"deposit" | "withdraw">("deposit");
   const [amount, setAmount] = useState(""); // empty by default — never pre-fill an amount the user may not have
   const [busy, setBusy] = useState(false);
@@ -996,8 +1000,10 @@ function FundsModal({ onClose, wallet, usdcMint, walletUsdc, inBasketUsd, onLog,
   const max = tab === "deposit" ? walletUsdc : inBasketUsd;
   const n = Number(amount) || 0;
   const over = max != null && n > max + 1e-6; // typed more than is available
+  const minSol = tab === "withdraw" ? 0.006 : 0.002; // network fee + (withdraw) settlement-account rent
+  const lowSol = walletSol != null && walletSol < minSol; // no SOL to pay the fee → tx would fail in the wallet
   const run = async () => {
-    if (!wallet || !usdcMint || busy || !(n > 0) || over) return;
+    if (!wallet || !usdcMint || busy || !(n > 0) || over || lowSol) return;
     const amt = amount;
     setBusy(true); setStep(null); setPending(false);
     try { const fn = tab === "deposit" ? depositUsdc : withdrawUsdc; const r = await fn({ wallet, usdcMint, amount, onStep: setStep, onLog }); if (r.ok) { onMoved(); onSuccess(tab, amt, r.signature); } else if ("executePending" in r && r.executePending) setPending(true); }
@@ -1011,8 +1017,9 @@ function FundsModal({ onClose, wallet, usdcMint, walletUsdc, inBasketUsd, onLog,
       <div className="big-input"><span className="cur">$</span><input value={amount} disabled={busy} onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, "").replace(/(\..*)\./g, "$1"))} placeholder="0" inputMode="decimal" /><span className="muted" style={{ fontWeight: 800, fontSize: 13 }}>USDC</span></div>
       {step && <div className="small" style={{ color: step.phase === "error" ? "var(--red)" : "var(--muted)", fontWeight: 700 }}>{step.note ?? step.label}</div>}
       {over && <div className="small" style={{ color: "var(--red)", fontWeight: 800 }}>Not enough {tab === "deposit" ? "USDC in your wallet" : "in your trading balance"} — you have ${(max ?? 0).toFixed(2)}.</div>}
+      {lowSol && <div className="small" style={{ color: "var(--red)", fontWeight: 800 }}>You need a little SOL (~{minSol.toFixed(3)}) to cover the network fee — add some SOL to your wallet first.</div>}
       {pending ? <button className="btn btn--primary btn--block" disabled={busy} onClick={() => void retry()}>{busy ? "…" : "Try again"}</button>
-        : <button className="btn btn--primary btn--block" disabled={busy || !(n > 0) || over || !wallet} onClick={() => void run()}>{busy ? "…" : over ? "Not enough USDC" : tab === "deposit" ? `Add $${n > 0 ? n.toFixed(0) : ""} USDC` : "Withdraw USDC"}</button>}
+        : <button className="btn btn--primary btn--block" disabled={busy || !(n > 0) || over || lowSol || !wallet} onClick={() => void run()}>{busy ? "…" : lowSol ? "Add SOL for fees" : over ? "Not enough USDC" : tab === "deposit" ? `Add $${n > 0 ? n.toFixed(0) : ""} USDC` : "Withdraw USDC"}</button>}
     </ModalShell>
   );
 }
