@@ -71,7 +71,9 @@ export interface EnableWalletCtx {
 
 // ── error classification (per-step) ──────────────────────────────────────────
 
-const RE_ALREADY = /already in use|already exists|custom program error: 0x0\b/i;
+// 0x0 = system "account already in use"; 0x1900 = Flash "deposit ledger already
+// initialized" — both mean the account already exists, so the step is a no-op.
+const RE_ALREADY = /already in use|already exists|custom program error: 0x0\b|custom program error: 0x1900\b/i;
 const RE_UPSTREAM = /Access violation in heap|ProgramFailedToComplete/i;
 const RE_REJECTED = /reject|declin|cancel/i;
 const RE_STALE = /blockhash not found|block height exceeded|expired/i;
@@ -94,6 +96,11 @@ export function classifyTxError(e: unknown): {
   rejected: boolean;
 } {
   const raw = errText(e);
+  const lamports = raw.match(/insufficient lamports\s+(\d+),\s*need\s+(\d+)/i);
+  if (lamports) {
+    const need = Math.max(0.01, Math.ceil(((Number(lamports[2]) - Number(lamports[1])) / 1e9 + 0.003) * 1000) / 1000);
+    return { message: `your wallet needs ~${need.toFixed(3)} more SOL to cover network rent — add a little SOL and try again (your funds are safe)`, upstream: false, stale: false, rejected: false };
+  }
   if (RE_UPSTREAM.test(raw)) return { message: UPSTREAM_MESSAGE, upstream: true, stale: false, rejected: false };
   if (RE_REJECTED.test(raw))
     return { message: "approval declined in the wallet — nothing was sent", upstream: false, stale: false, rejected: true };
@@ -145,7 +152,16 @@ export async function enableOneClickTrading(args: {
   const owner = wallet.publicKey.toBase58();
 
   // 1 ── what does this account still need?
-  const basketExists = Boolean(snapshot?.basketPubkey);
+  // Re-read on-chain state FRESH. A fast click can run this with a stale/null
+  // snapshot (still loading), which would make us try to re-create an account
+  // that already exists — Flash rejects that on the deposit ledger with 0x1900.
+  // A direct /owner read is authoritative and removes that race.
+  let snap = snapshot;
+  try {
+    const fresh = await flash.owner(owner);
+    if (fresh) snap = fresh;
+  } catch { /* network hiccup — fall back to the snapshot the caller passed */ }
+  const basketExists = Boolean(snap?.basketPubkey);
   const freshSession = loadSession(owner);
   const needs = {
     session: !freshSession,

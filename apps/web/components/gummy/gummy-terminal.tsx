@@ -19,7 +19,7 @@ import { OrderCard } from "@/components/gummy/order-card";
 import { enableOneClickTrading, type EnableState, type EnableWalletCtx } from "@/lib/enable";
 import { depositUsdc, executeWithdrawalStep, withdrawUsdc, type FundsStep } from "@/lib/funds";
 import { COLLATERAL, flash, MARKETS } from "@/lib/flash";
-import { computePositionView, fmtMs, fmtPnlUsd, num, shortKey } from "@/lib/format";
+import { computePositionView, explorerLink, FLASH_ER_RPC, fmtMs, fmtPnlUsd, num, shortKey } from "@/lib/format";
 import { useBalances, useBasketBalance, useLatencyLog, useLivePrice, useMarketLimits, useMarkets, useOwner, useUsdcMint, type LatencyEntry } from "@/lib/hooks";
 import { loadSession, type LoadedSession } from "@/lib/session";
 import { makeSessionSigner } from "@/lib/signer";
@@ -83,14 +83,25 @@ const FLASH_ERRORS: Record<number, string> = {
 
 function errMsg(e: unknown): string {
   const raw = e instanceof FlashV2Error ? e.message : e instanceof Error ? e.message : String(e);
-  // Decode Anchor custom on-chain errors instead of leaking raw JSON + signature.
+  // Not enough SOL for network rent/fees — the System Program reports the exact gap.
+  const lamports = raw.match(/insufficient lamports\s+(\d+),\s*need\s+(\d+)/i);
+  if (lamports) {
+    const gap = (Number(lamports[2]) - Number(lamports[1])) / 1e9;
+    const need = Math.max(0.01, Math.ceil((gap + 0.003) * 1000) / 1000);
+    return `Almost there — your wallet needs ~${need.toFixed(3)} more SOL to cover network rent. Add a little SOL and try again. Your funds are safe.`;
+  }
+  // Decode Anchor custom on-chain errors (JSON "Custom": N, or raw "0x..hex") to
+  // plain language instead of leaking the simulation log.
   const custom = raw.match(/"Custom":\s*(\d+)/);
-  if (custom) {
-    const code = Number(custom[1]);
+  const hex = raw.match(/custom program error:\s*0x([0-9a-fA-F]+)/i);
+  const code = custom ? Number(custom[1]) : hex ? parseInt(hex[1]!, 16) : null;
+  if (code !== null) {
+    if (code === 6400) return "This wallet already has a Flash account — refresh the page and it'll use the existing one.";
+    if (code === 0 || code === 1) return "Your wallet is a little short on SOL for this step — add ~0.01 SOL and try again.";
     return FLASH_ERRORS[code] ?? `The network rejected this (code ${code}) — nothing was charged. Try again.`;
   }
-  if (/Failed to fetch|502/i.test(raw)) return "Can't reach the RPC right now; nothing was submitted.";
-  if (/429|Too Many Requests/i.test(raw)) return "RPC is rate-limiting. Set NEXT_PUBLIC_BASE_RPC to your own RPC.";
+  if (/Failed to fetch|502/i.test(raw)) return "Can't reach the network right now; nothing was submitted. Try again.";
+  if (/429|Too Many Requests/i.test(raw)) return "The network is busy — give it a moment and try again.";
   return raw;
 }
 
@@ -986,7 +997,7 @@ function HistoryModal({ onClose, entries, walletUsdc, inBasketUsd, onDisconnect,
           <div key={e.id} className="hist-row">
             <span className={`hist-dot ${e.chain === "er" ? "hd-good" : "hd-info"}`} />
             <span className="hist-label">{e.action}</span>
-            <a className="hist-sig" href={`https://explorer.solana.com/tx/${e.signature}`} target="_blank" rel="noreferrer">{shortKey(e.signature)}</a>
+            <a className="hist-sig" href={explorerLink(e.signature, e.chain === "er" ? FLASH_ER_RPC : null)} target="_blank" rel="noreferrer" title="View on Solana Explorer">{shortKey(e.signature)} ↗</a>
             <span className="hist-time">{e.ms}ms</span>
           </div>
         ))}

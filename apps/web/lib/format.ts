@@ -11,6 +11,22 @@ export function shortKey(key: string, n = 4): string {
   return `${key.slice(0, n)}…${key.slice(-n)}`;
 }
 
+// ── Solana Explorer links ───────────────────────────────────────────────────
+// MagicBlock ER transactions don't live on the base-chain explorer, so we point
+// Solana Explorer at the ER RPC via ?cluster=custom&customUrl=… (the exact form
+// MagicBlock's own explorer links use). Ghost orders/ticks/crank are on the
+// devnet ER; Flash trades are on Flash's mainnet ER; deposits/withdrawals are
+// on base mainnet (the explorer's default cluster).
+export const GHOST_ER_RPC = process.env.NEXT_PUBLIC_GHOST_ER_RPC ?? "https://devnet.magicblock.app";
+export const FLASH_ER_RPC = process.env.NEXT_PUBLIC_ER_RPC ?? "https://flash.magicblock.xyz";
+
+/** Build a Solana Explorer link. Pass the ER RPC for rollup txs, or null for
+ *  base mainnet. `kind` selects a tx or an account/address page. */
+export function explorerLink(value: string, rpc: string | null, kind: "tx" | "address" = "tx"): string {
+  const url = `https://explorer.solana.com/${kind}/${value}`;
+  return rpc ? `${url}?cluster=custom&customUrl=${encodeURIComponent(rpc)}` : url;
+}
+
 /** Parse an API decimal string defensively. Returns null on junk/Infinity. */
 export function num(v: string | number | null | undefined): number | null {
   if (v === null || v === undefined) return null;

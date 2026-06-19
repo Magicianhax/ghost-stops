@@ -6,6 +6,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ghostStopLevel, rawToUi, useTickStats, type GhostOrder } from "@/lib/ghost";
+import { explorerLink, GHOST_ER_RPC, shortKey } from "@/lib/format";
 
 const PILL: Record<GhostOrder["state"], { cls: string; text: string }> = {
   active: { cls: "st-trailing", text: "trailing" },
@@ -80,6 +81,16 @@ export function OrderCard({ order, markUi, entryUi = null, onCancel, onOpen }: {
       ) : (
         <div className="muted small" style={{ fontWeight: 700 }}>Cancelled.</div>
       )}
+      <a
+        className="oc-onchain"
+        href={explorerLink(order.pda, GHOST_ER_RPC, "address")}
+        target="_blank"
+        rel="noreferrer"
+        onClick={(e) => e.stopPropagation()}
+        title="View this order account + its live crank ticks on Solana Explorer (MagicBlock ER)"
+      >
+        ⛓ on-chain {live ? "· live ticks" : "order"} · {shortKey(order.pda)} ↗
+      </a>
     </div>
   );
 }

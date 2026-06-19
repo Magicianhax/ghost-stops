@@ -308,6 +308,8 @@
 .gs-terminal .eval-line{ display:flex; justify-content:space-between; align-items:center; font-size:12px; color:var(--muted); font-weight:800; }
 .gs-terminal .eval-count{ color:var(--green); font-family:var(--font-num); }
 .gs-terminal .oc-actions{ margin-top:12px; }
+.gs-terminal .oc-onchain{ display:inline-flex; align-items:center; gap:4px; margin-top:10px; font-size:11px; font-weight:800; color:var(--muted); font-family:var(--font-num); text-decoration:none; transition:color .15s; }
+.gs-terminal .oc-onchain:hover{ color:var(--green); }
 .gs-terminal .market-search{ width:100%; display:flex; align-items:center; gap:10px; padding:11px 15px; border-radius:var(--r-lg); border:var(--bw) solid var(--outline); background:var(--panel); box-shadow:var(--sh-hard); margin-bottom:4px; }
 .gs-terminal .market-search input{ flex:1; background:none; border:none; outline:none; color:var(--ink); font-family:var(--font-ui); font-weight:700; font-size:15px; }
 .gs-terminal .market-search input::placeholder{ color:var(--faint); }
