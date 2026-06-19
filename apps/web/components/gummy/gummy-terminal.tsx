@@ -917,7 +917,7 @@ function Inner() {
           : { kind: "good", title: "Withdrawal complete ✓", sub: `${usd} is back in your wallet.`, sig });
         setModal(null);
       }} />}
-      {modal === "history" && <HistoryModal onClose={() => setModal(null)} entries={entries} walletUsdc={balances.usdc} inBasketUsd={basketBal?.inBasketUsd ?? null} onDisconnect={() => { void walletCtx.disconnect(); setModal(null); }} onFunds={() => setModal("funds")} connected={Boolean(walletPk)} pk={walletPk} />}
+      {modal === "history" && <HistoryModal onClose={() => setModal(null)} entries={entries} walletUsdc={balances.usdc} inBasketUsd={basketBal?.inBasketUsd ?? null} onDisconnect={() => { void walletCtx.disconnect(); setModal(null); }} onFunds={() => setModal("funds")} connected={Boolean(walletPk)} pk={walletPk} basketPubkey={snapshot?.basketPubkey ?? null} />}
       {modal === "settings" && <SettingsModal onClose={() => setModal(null)} theme={theme} setTheme={setTheme} chartStyle={chartStyle} setChartStyle={setChartStyle} density={density} setDensity={setDensity} />}
       {modal === "about" && <AboutModal onClose={() => setModal(null)} />}
     </div>
@@ -1032,7 +1032,7 @@ function histCategory(e: LatencyEntry): "trade" | "funds" | "other" {
   return "other";
 }
 
-function HistoryModal({ onClose, entries, walletUsdc, inBasketUsd, onDisconnect, onFunds, connected, pk }: { onClose: () => void; entries: LatencyEntry[]; walletUsdc: number | null; inBasketUsd: number | null; onDisconnect: () => void; onFunds: () => void; connected: boolean; pk: string | null }) {
+function HistoryModal({ onClose, entries, walletUsdc, inBasketUsd, onDisconnect, onFunds, connected, pk, basketPubkey }: { onClose: () => void; entries: LatencyEntry[]; walletUsdc: number | null; inBasketUsd: number | null; onDisconnect: () => void; onFunds: () => void; connected: boolean; pk: string | null; basketPubkey: string | null }) {
   const [filter, setFilter] = useState<HistFilter>("all");
   const shown = filter === "all" ? entries : entries.filter((e) => histCategory(e) === filter);
   const FILTERS: { key: HistFilter; label: string }[] = [{ key: "all", label: "All" }, { key: "trade", label: "Trades" }, { key: "funds", label: "Funds" }];
@@ -1045,8 +1045,18 @@ function HistoryModal({ onClose, entries, walletUsdc, inBasketUsd, onDisconnect,
           <div className="row" style={{ gap: 8 }}><button className="btn btn--primary" style={{ flex: 1 }} onClick={onFunds}>Add / Withdraw</button><button className="btn btn--ghost" onClick={onDisconnect}>Disconnect</button></div>
         </>
       )}
+      {basketPubkey && (
+        <>
+          <div className="section-label">Full history on-chain · any device</div>
+          <div className="row" style={{ gap: 12, flexWrap: "wrap", marginBottom: 2 }}>
+            <a className="oc-onchain" href={explorerLink(basketPubkey, FLASH_ER_RPC, "address")} target="_blank" rel="noreferrer" title="Every trade for this wallet, on the Flash Trade Ephemeral Rollup">⛓ Trades (Flash ER) ↗</a>
+            <a className="oc-onchain" href={explorerLink(basketPubkey, null, "address")} target="_blank" rel="noreferrer" title="Deposits & withdrawals for this wallet, on Solana mainnet">⛓ Deposits / withdrawals ↗</a>
+          </div>
+          <div className="muted small" style={{ fontWeight: 700, marginBottom: 2 }}>Tied to your wallet&apos;s account — opens the same history on any device.</div>
+        </>
+      )}
       <div className="row" style={{ justifyContent: "space-between", marginTop: 4 }}>
-        <span className="section-label" style={{ margin: 0 }}>Recent activity</span>
+        <span className="section-label" style={{ margin: 0 }}>Recent activity · this device</span>
         {entries.length > 0 && (
           <div className="hist-filters">
             {FILTERS.map((f) => <button key={f.key} className={`hist-filter ${filter === f.key ? "on" : ""}`} onClick={() => setFilter(f.key)}>{f.label}</button>)}
