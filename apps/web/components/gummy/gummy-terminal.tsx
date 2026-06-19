@@ -558,10 +558,11 @@ function Inner() {
   const priceTxt = price ? price.priceUi.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "—";
   const enableWallet: EnableWalletCtx | null = walletCtx.publicKey && walletCtx.signTransaction ? { publicKey: walletCtx.publicKey, signTransaction: walletCtx.signTransaction, signAllTransactions: walletCtx.signAllTransactions } : null;
   const phase = !walletPk ? "connect" : !signedIn ? "signin" : !enabled ? "enable" : (basketBal !== null && basketBal.inBasketUsd < 0.01) ? "deposit" : position ? "position" : "flat";
-  // fire the tour only once the user is genuinely set up AND the basket balance has
-  // loaded — phase momentarily reads "flat" while basketBal is still null during
-  // onboarding, which was popping the tour before "Set up your account" finished.
-  const tour = useTour(phase === "flat" && basketBal !== null);
+  // fire the tour only on a clean, idle, ready-to-trade screen: set up + balance
+  // loaded, AND nothing else on top — no modal/drawer open and not mid-enable.
+  // (A returning user can read as "flat"+funded while the "Set up your account"
+  // modal is still running, which was popping the tour over the setup flow.)
+  const tour = useTour(phase === "flat" && basketBal !== null && modal === null && drawer === null && !enabling);
   // keyboard: Escape skips the tour while it runs, else closes any open surface.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
