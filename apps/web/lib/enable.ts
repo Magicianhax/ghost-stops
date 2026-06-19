@@ -113,26 +113,34 @@ export function classifyTxError(e: unknown): {
 
 export async function submitAndConfirm(
   tx: Transaction | VersionedTransaction,
-  timeoutMs = 45_000,
+  timeoutMs = 60_000,
 ): Promise<{ signature: string; ms: number }> {
   const raw = tx.serialize();
   const started = Date.now();
   const signature = await baseConnection.sendRawTransaction(raw, { maxRetries: 3 });
+  // Authoritative across the FULL ledger, not just the recent window — a tx that
+  // landed but confirmed slowly (base mainnet under load / RPC lag) must read as
+  // success, never as failure. Used for the final check so a withdrawal whose
+  // funds already moved can't get stuck on "Try again".
+  const confirmed = async (history: boolean) => {
+    const status = (await baseConnection.getSignatureStatuses([signature], { searchTransactionHistory: history })).value[0];
+    if (status?.err) throw new Error(`on-chain error (${signature}): ${JSON.stringify(status.err)}`);
+    return status?.confirmationStatus === "confirmed" || status?.confirmationStatus === "finalized";
+  };
   for (;;) {
     try {
-      const status = (await baseConnection.getSignatureStatuses([signature])).value[0];
-      if (status) {
-        if (status.err) throw new Error(`on-chain error (${signature}): ${JSON.stringify(status.err)}`);
-        const level = status.confirmationStatus;
-        if (level === "confirmed" || level === "finalized") {
-          return { signature, ms: Date.now() - started };
-        }
-      }
+      if (await confirmed(false)) return { signature, ms: Date.now() - started };
     } catch (e) {
       // A real on-chain error must surface; transient 429s while polling must not.
       if (e instanceof Error && e.message.startsWith("on-chain error")) throw e;
     }
-    if (Date.now() - started > timeoutMs) throw new Error(`confirmation timeout (${signature})`);
+    if (Date.now() - started > timeoutMs) {
+      // Final full-history check before giving up — the tx may have landed.
+      try { if (await confirmed(true)) return { signature, ms: Date.now() - started }; } catch (e) {
+        if (e instanceof Error && e.message.startsWith("on-chain error")) throw e;
+      }
+      throw new Error(`confirmation timeout (${signature})`);
+    }
     await new Promise((r) => setTimeout(r, 400));
   }
 }
