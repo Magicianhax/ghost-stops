@@ -500,3 +500,33 @@
   .gs-terminal .switch .knob{ width:22px; height:22px; }
   .gs-terminal .switch.on .knob{ transform:translateX(20px); }
 }
+
+/* ── Stops explainer (top of the Stops drawer) ── */
+.gs-terminal .stops-explainer{ border:2.5px solid var(--outline-soft); border-radius:var(--r-md); background:var(--panel-2); padding:13px 14px; margin-bottom:12px; }
+.gs-terminal .se-title{ font-weight:800; font-size:14px; color:var(--ink); margin-bottom:5px; }
+.gs-terminal .se-body{ font-size:12px; line-height:1.5; color:var(--muted); font-weight:700; }
+.gs-terminal .se-body b{ color:var(--accent); }
+
+/* ── guided tour ── */
+.gs-terminal .tour-root{ position:fixed; inset:0; z-index:200; }
+.gs-terminal .tour-catch{ position:fixed; inset:0; cursor:default; }
+.gs-terminal .tour-svg{ position:fixed; inset:0; pointer-events:none; }
+.gs-terminal .tour-mask{ fill:rgba(4,10,7,0.74); transition:fill .2s; }
+.gs-terminal .tour-ring{ fill:none; stroke:var(--accent); stroke-width:2.5; opacity:.95; }
+.gs-terminal .tour-pop{ position:fixed; width:300px; max-width:calc(100vw - 16px); background:var(--panel); border:2.5px solid var(--outline); border-radius:var(--r-md); box-shadow:0 18px 50px rgba(0,0,0,.5); padding:16px; z-index:201; animation:gt-tour-in .22s cubic-bezier(.2,.8,.25,1) both; }
+@keyframes gt-tour-in{ from{ opacity:0; transform:translateY(6px) scale(.98); } to{ opacity:1; transform:none; } }
+.gs-terminal .tour-title{ font-weight:800; font-size:16px; color:var(--ink); margin:0 22px 6px 0; }
+.gs-terminal .tour-body{ font-size:13px; line-height:1.55; color:var(--muted); font-weight:700; }
+.gs-terminal .tour-foot{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:14px; }
+.gs-terminal .tour-count{ font-size:11px; color:var(--faint); font-weight:700; }
+.gs-terminal .tour-btns{ display:flex; gap:8px; }
+.gs-terminal .tour-btn{ font-weight:800; font-size:13px; padding:7px 15px; border-radius:var(--r-pill); cursor:pointer; border:2px solid var(--outline); transition:filter .12s, color .12s; }
+.gs-terminal .tour-next{ background:var(--accent); color:#1a1205; }
+.gs-terminal .tour-next:hover{ filter:brightness(1.06); }
+.gs-terminal .tour-back{ background:transparent; color:var(--muted); }
+.gs-terminal .tour-back:hover{ color:var(--ink); }
+.gs-terminal .tour-x{ position:absolute; top:9px; right:10px; background:none; border:none; color:var(--faint); font-size:14px; cursor:pointer; line-height:1; }
+.gs-terminal .tour-x:hover{ color:var(--ink); }
+.gs-terminal .tour-skip{ display:block; margin-top:10px; background:none; border:none; color:var(--faint); font-size:11px; font-weight:700; cursor:pointer; padding:0; text-decoration:underline; }
+.gs-terminal .tour-skip:hover{ color:var(--muted); }
+@media (max-width:560px){ .gs-terminal .tour-pop{ width:calc(100vw - 16px); } }

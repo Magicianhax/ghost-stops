@@ -27,6 +27,8 @@ import { loadSession, type LoadedSession } from "@/lib/session";
 import { makeSessionSigner } from "@/lib/signer";
 import { usePriceHistory } from "@/lib/use-price-history";
 import { cancelGhostOrder, clearAuthToken, createGhostOrder, ghostStopLevel, hasAuthToken, rawToUi, registerSessionWithExecutor, signInWithExecutor, useGhostMarkets, useGhostOrders, useLatestCrankSig, useOnchainHistory, type ChainTx } from "@/lib/ghost";
+import { useTour } from "./tour/use-tour";
+import { TourOverlay } from "./tour/tour-overlay";
 import { useMarketStats, type MarketStat } from "@/lib/market-stats";
 import "@/app/terminal.css";
 
@@ -239,6 +241,7 @@ function Inner() {
   const chainHistory = useOnchainHistory(snapshot?.basketPubkey ?? null, drawer === "history");
   // enrich on-chain rows with this browser's labeled log (action · market · PnL) by signature
   const localBySig = useMemo(() => { const m = new Map<string, LatencyEntry>(); for (const e of entries) if (e.signature) m.set(e.signature, e); return m; }, [entries]);
+  const [histKind, setHistKind] = useState<"all" | "trade" | "fund">("all");
   // markets dropdown is anchored under the pair pill (left:0); measure the pill so
   // the popover width can't overflow the viewport on narrow screens.
   const marketWrapRef = useRef<HTMLDivElement | null>(null);
@@ -402,15 +405,6 @@ function Inner() {
     }
   }, [ghostOrders, allPositions, signedIn, snapshot]);
 
-  // keyboard: Escape closes any open surface. (Arrow-key trading was removed —
-  // an invisible keybind that fired real leveraged market orders is a footgun.)
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") { setConfirmAct(null); setGlossary(null); setModal(null); setDrawer(null); }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
 
   // ── actions ─────────────────────────────────────────────────────────────────
   // Open a position AND (if "Protect" is on and the market has a feed) arm the
@@ -564,6 +558,17 @@ function Inner() {
   const priceTxt = price ? price.priceUi.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "—";
   const enableWallet: EnableWalletCtx | null = walletCtx.publicKey && walletCtx.signTransaction ? { publicKey: walletCtx.publicKey, signTransaction: walletCtx.signTransaction, signAllTransactions: walletCtx.signAllTransactions } : null;
   const phase = !walletPk ? "connect" : !signedIn ? "signin" : !enabled ? "enable" : (basketBal !== null && basketBal.inBasketUsd < 0.01) ? "deposit" : position ? "position" : "flat";
+  const tour = useTour(phase); // first-run guided tour (fires once when the ticket first appears)
+  // keyboard: Escape skips the tour while it runs, else closes any open surface.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (tour.active) { tour.skip(); return; } // don't close the drawer the tour just opened
+      setConfirmAct(null); setGlossary(null); setModal(null); setDrawer(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [tour.active, tour.skip]);
   const activeStop = activeStops.find((o) => position && o.market === position.marketSymbol);
   const stopUi = activeStop ? rawToUi(ghostStopLevel(activeStop)) : null;
   const sizeNum = Number(sizeUsd) || SIZE_DEFAULT;
@@ -643,8 +648,8 @@ function Inner() {
             )}
           </div>
           <div className="spacer" />
-          <button className="seg seg-btn" onClick={() => setDrawer("stops")}><Icon name="pulse" className="gi" /><span className="seg-label">Stops</span>{activeStops.length > 0 && <span className="badge live">{activeStops.length}</span>}</button>
-          {walletPk && <button className="seg seg-btn" onClick={() => setDrawer("history")} title="Your trades & fund moves, on-chain"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className="gi"><circle cx="12" cy="12" r="9" /><path d="M12 7.5V12l3 1.8" /></svg><span className="seg-label">History</span></button>}
+          <button className="seg seg-btn" data-tour="stops" onClick={() => setDrawer("stops")}><Icon name="pulse" className="gi" /><span className="seg-label">Stops</span>{activeStops.length > 0 && <span className="badge live">{activeStops.length}</span>}</button>
+          {walletPk && <button className="seg seg-btn" data-tour="history" onClick={() => setDrawer("history")} title="Your trades & fund moves, on-chain"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className="gi"><circle cx="12" cy="12" r="9" /><path d="M12 7.5V12l3 1.8" /></svg><span className="seg-label">History</span></button>}
           {unprotectedPositions.length > 0 && (
             <button className="seg seg--risk" onClick={() => setDrawer("risk")} title="Open trades with no stop"><Icon name="alert" size={16} /><span className="seg-label">{unprotectedPositions.length} unprotected</span></button>
           )}
@@ -665,7 +670,7 @@ function Inner() {
           ) : (
             <button className="seg seg--connect"><span className="btn btn--accent" onClick={() => setModal("wallet")} style={{ boxShadow: "none", border: "none" }}>Connect</span></button>
           )}
-          <button className="seg seg-btn" onClick={() => setModal("about")} title="How Ghost Stops works"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className="gi"><circle cx="12" cy="12" r="9" /><line x1="12" y1="11" x2="12" y2="16" /><circle cx="12" cy="7.6" r="0.6" fill="currentColor" stroke="none" /></svg><span className="seg-label">How it works</span></button>
+          <button className="seg seg-btn" data-tour="about" onClick={() => setModal("about")} title="How Ghost Stops works"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className="gi"><circle cx="12" cy="12" r="9" /><line x1="12" y1="11" x2="12" y2="16" /><circle cx="12" cy="7.6" r="0.6" fill="currentColor" stroke="none" /></svg><span className="seg-label">How it works</span></button>
           <button className="seg seg--icon" onClick={() => setModal("settings")} title="Settings"><Icon name="gear" size={20} /></button>
         </div>
 
@@ -753,7 +758,7 @@ function Inner() {
         })()}
 
         {/* ── action zone ── */}
-        <div className="actionzone actionzone--cluster">
+        <div className="actionzone actionzone--cluster" data-tour="trade">
           {phase === "connect" && <button className="act act--connect act--cta" onClick={() => setModal("wallet")}><span className="act-cta-big disp">Start trading</span></button>}
           {phase === "signin" && <button className="act act--enable act--cta" onClick={() => void doSignIn()} disabled={!signInDeclined}><span className="act-cta-big disp">{signInDeclined ? "Prove your wallet (free)" : "Proving your wallet…"}</span></button>}
           {phase === "enable" && <button className="act act--enable act--cta" onClick={() => void runEnable()} disabled={enabling}><span className="act-cta-big disp">{enabling ? "Setting up…" : "Set up your account"}</span></button>}
@@ -834,6 +839,10 @@ function Inner() {
           <div className="drawer">
             <div className="drawer-head"><Ghost size={32} /><span className="drawer-title disp">Ghost Stops</span><button className="drawer-x" onClick={() => setDrawer(null)}>✕</button></div>
             <div className="drawer-body">
+              <div className="stops-explainer">
+                <div className="se-title disp">What &ldquo;Stops&rdquo; means</div>
+                <div className="se-body">A trailing stop is an automatic safety net for an open trade. It follows the price as it moves your way and locks in that gain — then if the price reverses by the % you chose, it <b>sells for you</b> to stop a win from turning into a big loss. Every stop you arm lives <b>on-chain</b> and is watched ~10× a second, so it works even with this tab closed.</div>
+              </div>
               {!enabled && <div className="empty"><Ghost size={70} className="em-ghost" /><div className="em-title disp">Set up to add protection</div><div className="em-sub">Connect, set up your account, then any trade can carry a trailing stop that watches the price for you.</div></div>}
               {enabled && !registered && <div className="small" style={{ color: "var(--red)", fontWeight: 800 }}>{executorUp ? "Re-arming your stops — give it a second…" : "Live protection service is reconnecting — your existing stops are safe on-chain and will resume automatically."}</div>}
               {enabled && registered && position && !protectedNow && stopsSupported(position.marketSymbol) && (
@@ -931,25 +940,37 @@ function Inner() {
                 <div className="empty"><Ghost size={70} className="em-ghost" /><div className="em-title disp">No on-chain activity yet</div><div className="em-sub">Set up your account and make a trade — it&apos;ll show up here, on any device.</div></div>
               ) : (
                 <>
-                  <div className="hist-note">On-chain · tied to your wallet · shows on any device</div>
-                  {chainHistory.loading && chainHistory.items.length === 0 ? (
-                    <div className="muted small" style={{ fontWeight: 700, padding: "10px 2px" }}>Loading your on-chain history…</div>
-                  ) : chainHistory.items.length === 0 ? (
-                    <div className="muted small" style={{ fontWeight: 700, padding: "10px 2px" }}>No transactions found yet.</div>
-                  ) : chainHistory.items.map((tx: ChainTx) => {
-                    const local = localBySig.get(tx.signature);
-                    const pnl = local?.trade?.pnlUi ?? null;
-                    const label = local ? `${local.action}${local.trade?.market ? ` · ${local.trade.market}` : ""}` : tx.source === "trade" ? "Trade" : "Deposit / withdrawal";
-                    return (
-                      <a key={tx.signature} className="hist-row hist-row--link" href={explorerLink(tx.signature, tx.source === "trade" ? FLASH_ER_RPC : null, "tx")} target="_blank" rel="noreferrer" title="View this transaction on Solana Explorer">
-                        <span className={`hist-dot ${tx.err ? "hd-bad" : tx.source === "trade" ? "hd-good" : "hd-info"}`} />
-                        <span className="hist-label">{label}{tx.err ? " · failed" : ""}{pnl != null && <b style={{ marginLeft: 6, color: pnl < 0 ? "var(--red)" : "var(--green)" }}>{pnl >= 0 ? "+" : "−"}${Math.abs(pnl).toFixed(2)}</b>}</span>
-                        <span className="hist-sig">{shortKey(tx.signature)} ↗</span>
-                        <span className="hist-time">{timeAgo(tx.blockTime)}</span>
-                      </a>
-                    );
-                  })}
-                  <div className="hist-foot">Trades settle on the Flash ER · deposits/withdrawals on Solana mainnet.</div>
+                  <div className="row" style={{ justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                    <span className="hist-note" style={{ margin: 0 }}>On-chain · tied to your wallet</span>
+                    <div className="hist-filters">
+                      {([{ key: "all", label: "All" }, { key: "trade", label: "Trades" }, { key: "fund", label: "Funds" }] as const).map((f) => (
+                        <button key={f.key} className={`hist-filter ${histKind === f.key ? "on" : ""}`} onClick={() => setHistKind(f.key)}>{f.label}</button>
+                      ))}
+                    </div>
+                  </div>
+                  {(() => {
+                    const shownTx = histKind === "all" ? chainHistory.items : chainHistory.items.filter((tx) => tx.source === histKind);
+                    return chainHistory.loading && chainHistory.items.length === 0 ? (
+                      <div className="muted small" style={{ fontWeight: 700, padding: "10px 2px" }}>Loading your on-chain history…</div>
+                    ) : chainHistory.items.length === 0 ? (
+                      <div className="muted small" style={{ fontWeight: 700, padding: "10px 2px" }}>No transactions found yet.</div>
+                    ) : shownTx.length === 0 ? (
+                      <div className="muted small" style={{ fontWeight: 700, padding: "10px 2px" }}>No {histKind === "trade" ? "trades" : "fund moves"} yet.</div>
+                    ) : shownTx.map((tx: ChainTx) => {
+                      const local = localBySig.get(tx.signature);
+                      const pnl = local?.trade?.pnlUi ?? null;
+                      const label = local ? `${local.action}${local.trade?.market ? ` · ${local.trade.market}` : ""}` : tx.source === "trade" ? "Trade" : "Deposit / withdrawal";
+                      return (
+                        <a key={tx.signature} className="hist-row hist-row--link" href={explorerLink(tx.signature, tx.source === "trade" ? FLASH_ER_RPC : null, "tx")} target="_blank" rel="noreferrer" title="View this transaction on Solana Explorer">
+                          <span className={`hist-dot ${tx.err ? "hd-bad" : tx.source === "trade" ? "hd-good" : "hd-info"}`} />
+                          <span className="hist-label">{label}{tx.err ? " · failed" : ""}{pnl != null && <b style={{ marginLeft: 6, color: pnl < 0 ? "var(--red)" : "var(--green)" }}>{pnl >= 0 ? "+" : "−"}${Math.abs(pnl).toFixed(2)}</b>}</span>
+                          <span className="hist-sig">{shortKey(tx.signature)} ↗</span>
+                          <span className="hist-time">{timeAgo(tx.blockTime)}</span>
+                        </a>
+                      );
+                    });
+                  })()}
+                  <div className="hist-foot">Trades settle on the Flash ER · deposits/withdrawals on Solana mainnet · shows on any device.</div>
                 </>
               )}
             </div>
@@ -972,8 +993,9 @@ function Inner() {
         setModal(null);
       }} />}
       {modal === "history" && <HistoryModal onClose={() => setModal(null)} entries={entries} walletUsdc={balances.usdc} inBasketUsd={basketBal?.inBasketUsd ?? null} onDisconnect={() => { void walletCtx.disconnect(); setModal(null); }} onFunds={() => setModal("funds")} connected={Boolean(walletPk)} pk={walletPk} basketPubkey={snapshot?.basketPubkey ?? null} />}
-      {modal === "settings" && <SettingsModal onClose={() => setModal(null)} theme={theme} setTheme={setTheme} chartStyle={chartStyle} setChartStyle={setChartStyle} density={density} setDensity={setDensity} />}
+      {modal === "settings" && <SettingsModal onClose={() => setModal(null)} theme={theme} setTheme={setTheme} chartStyle={chartStyle} setChartStyle={setChartStyle} density={density} setDensity={setDensity} onTour={() => { setModal(null); tour.start(); }} />}
       {modal === "about" && <AboutModal onClose={() => setModal(null)} />}
+      <TourOverlay {...tour} />
     </div>
   );
 }
@@ -1131,10 +1153,12 @@ function HistoryModal({ onClose, entries, walletUsdc, inBasketUsd, onDisconnect,
   );
 }
 
-function SettingsModal({ onClose, theme, setTheme, chartStyle, setChartStyle, density, setDensity }: { onClose: () => void; theme: string; setTheme: (t: string) => void; chartStyle: "line" | "candles"; setChartStyle: (c: "line" | "candles") => void; density: "compact" | "regular" | "comfy"; setDensity: (d: "compact" | "regular" | "comfy") => void }) {
+function SettingsModal({ onClose, theme, setTheme, chartStyle, setChartStyle, density, setDensity, onTour }: { onClose: () => void; theme: string; setTheme: (t: string) => void; chartStyle: "line" | "candles"; setChartStyle: (c: "line" | "candles") => void; density: "compact" | "regular" | "comfy"; setDensity: (d: "compact" | "regular" | "comfy") => void; onTour: () => void }) {
   const { muted, toggle } = useSound();
   return (
     <ModalShell title="Settings" onClose={onClose}>
+      <div className="section-label">Guide</div>
+      <button className="btn btn--ghost btn--block" onClick={onTour}>Take the tour</button>
       <div className="section-label">Sound</div>
       <div className="seg-tabs">
         <button className={`dtab ${!muted ? "on" : ""}`} onClick={() => muted && toggle()}>On</button>
