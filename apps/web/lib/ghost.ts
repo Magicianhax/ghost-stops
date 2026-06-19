@@ -401,3 +401,24 @@ export function useTickStream(pda: string | null, max = 24): Tick[] {
 
   return ticks;
 }
+
+/** Freshest SUCCESSFUL signature touching the Ghost program on the ER — so the
+ *  About page's "verify on-chain" link is always a real, recent crank tx and can
+ *  never go stale (unlike a hardcoded signature, which the ER may eventually
+ *  prune). Returns null until it resolves, so callers fall back to a static sig. */
+export function useLatestCrankSig(enabled: boolean): string | null {
+  const [sig, setSig] = useState<string | null>(null);
+  useEffect(() => {
+    if (!enabled) return;
+    let dead = false;
+    void (async () => {
+      try {
+        const sigs = await ghostEr.getSignaturesForAddress(GHOST_PROGRAM, { limit: 12 });
+        const fresh = sigs.find((s) => s.err == null)?.signature; // skip "no trigger" ticks that error
+        if (!dead && fresh) setSig(fresh);
+      } catch { /* keep null → caller uses its static fallback */ }
+    })();
+    return () => { dead = true; };
+  }, [enabled]);
+  return sig;
+}

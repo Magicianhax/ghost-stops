@@ -26,7 +26,7 @@ import { useBalances, useBasketBalance, useLatencyLog, useLivePrice, useMarketLi
 import { loadSession, type LoadedSession } from "@/lib/session";
 import { makeSessionSigner } from "@/lib/signer";
 import { usePriceHistory } from "@/lib/use-price-history";
-import { cancelGhostOrder, clearAuthToken, createGhostOrder, ghostStopLevel, hasAuthToken, rawToUi, registerSessionWithExecutor, signInWithExecutor, useGhostMarkets, useGhostOrders } from "@/lib/ghost";
+import { cancelGhostOrder, clearAuthToken, createGhostOrder, ghostStopLevel, hasAuthToken, rawToUi, registerSessionWithExecutor, signInWithExecutor, useGhostMarkets, useGhostOrders, useLatestCrankSig } from "@/lib/ghost";
 import { useMarketStats, type MarketStat } from "@/lib/market-stats";
 import "@/app/terminal.css";
 
@@ -1113,6 +1113,9 @@ function SettingsModal({ onClose, theme, setTheme, chartStyle, setChartStyle, de
 function AboutModal({ onClose }: { onClose: () => void }) {
   const PROGRAM = "y8gjZcwDHqZ8Sz2Uziw5nxr2cWKGyAKaqtNAUJ2mKxh";
   const SCHEDULE_SIG = "3UtD1W9DzhLwSju9WAAnSP9xpoc5URT1TVhg2nixdVSPo4j7V4EDukFzdtCz4tyDVnyre54Cy1KP199vkjNDWVS6";
+  // fetch a fresh, successful crank tx live so this link can never go stale; the
+  // hardcoded schedule sig is only the fallback if the ER is briefly unreachable.
+  const liveCrankSig = useLatestCrankSig(true);
   return (
     <ModalShell title="How Ghost Stops works" sub="On-chain trailing stops for Flash Trade V2 perps — non-custodial." onClose={onClose}>
       <div className="section-label">What's a trailing stop?</div>
@@ -1126,7 +1129,7 @@ function AboutModal({ onClose }: { onClose: () => void }) {
       <div className="section-label">Verify it on-chain</div>
       <div className="row" style={{ gap: 14, flexWrap: "wrap", marginBottom: 4 }}>
         <a className="oc-onchain" href={explorerLink(PROGRAM, GHOST_ER_RPC, "address")} target="_blank" rel="noreferrer">⛓ Our program ↗</a>
-        <a className="oc-onchain" href={explorerLink(SCHEDULE_SIG, GHOST_ER_RPC, "tx")} target="_blank" rel="noreferrer">⛓ Crank schedule tx ↗</a>
+        <a className="oc-onchain" href={explorerLink(liveCrankSig ?? SCHEDULE_SIG, GHOST_ER_RPC, "tx")} target="_blank" rel="noreferrer" title="A live, recent on-chain crank transaction — refreshes each visit so it never goes stale">⛓ {liveCrankSig ? "Live" : "Recent"} crank tx ↗</a>
         <a className="oc-onchain" href="https://github.com/Magicianhax/ghost-stops" target="_blank" rel="noreferrer">⛓ GitHub ↗</a>
       </div>
       <div className="section-label">Built on</div>
