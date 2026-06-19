@@ -18,12 +18,12 @@ import { GummyChart } from "@/components/gummy/gummy-chart";
 import { OrderCard } from "@/components/gummy/order-card";
 import { enableOneClickTrading, type EnableState, type EnableWalletCtx } from "@/lib/enable";
 import { depositUsdc, executeWithdrawalStep, withdrawUsdc, type FundsStep } from "@/lib/funds";
-import { COLLATERAL, flash, MARKETS } from "@/lib/flash";
+import { baseConnection, COLLATERAL, flash, MARKETS } from "@/lib/flash";
 import { computePositionView, explorerLink, FLASH_ER_RPC, GHOST_ER_RPC, fmtMs, fmtPnlUsd, num, shortKey } from "@/lib/format";
 import { playSound, unlockSound } from "@/lib/sound";
 import { useSound } from "@/lib/use-sound";
 import { useBalances, useBasketBalance, useLatencyLog, useLivePrice, useMarketLimits, useMarkets, useOwner, useUsdcMint, type LatencyEntry } from "@/lib/hooks";
-import { loadSession, type LoadedSession } from "@/lib/session";
+import { loadSession, revokeSession, type LoadedSession } from "@/lib/session";
 import { makeSessionSigner } from "@/lib/signer";
 import { usePriceHistory } from "@/lib/use-price-history";
 import { cancelGhostOrder, clearAuthToken, createGhostOrder, ghostStopLevel, hasAuthToken, rawToUi, registerSessionWithExecutor, signInWithExecutor, useGhostMarkets, useGhostOrders, useLatestCrankSig, useOnchainHistory, type ChainTx } from "@/lib/ghost";
@@ -524,6 +524,27 @@ function Inner() {
   }, [walletPk, position, attaching, trailBps, stopsSupported, ghostMarkets, refresh]);
 
   const cancelStop = useCallback((pda: string) => { void cancelGhostOrder(pda).catch((e) => { if (!/404|409|not found|already/i.test(String(e instanceof Error ? e.message : e))) setToast(errMsg(e)); }); }, []);
+
+  // Revoke the active trading session: closes the session-token account and
+  // refunds its rent + leftover 0.01 SOL top-up to the wallet (popup-free — the
+  // session key signs for itself). Clears local session/auth so the next trade
+  // re-prompts a fresh setup.
+  const [reclaiming, setReclaiming] = useState(false);
+  const reclaimSol = useCallback(async () => {
+    if (reclaiming) return;
+    if (!session) { setToast("No active session to revoke on this device."); return; }
+    setReclaiming(true);
+    try {
+      const res = await revokeSession(session, baseConnection);
+      if (!res) { setToast("Couldn't revoke right now — the session may have already expired. Try again shortly."); return; }
+      clearAuthToken();
+      setSession(null);
+      playSound("notice");
+      setNotice({ kind: "good", title: "Session revoked ✓", sub: "Your session's rent + leftover SOL top-up were refunded to your wallet.", sig: { signature: res.signature, rpc: null } });
+      void balances.refresh();
+    } catch (e) { setToast(errMsg(e)); }
+    finally { setReclaiming(false); }
+  }, [reclaiming, session, balances]);
   /** Jump to a token from a list (stop card, risk list) and close the drawer. */
   const openMarket = useCallback((m: string) => { setMarket(m.toUpperCase()); setDrawer(null); }, []);
   // user-driven trade-pref changes also save per-coin (restored on return).
@@ -996,7 +1017,7 @@ function Inner() {
           : { kind: "good", title: "Withdrawal complete ✓", sub: `${usd} is back in your wallet.`, sig });
         setModal(null);
       }} />}
-      {modal === "history" && <HistoryModal onClose={() => setModal(null)} entries={entries} walletUsdc={balances.usdc} inBasketUsd={basketBal?.inBasketUsd ?? null} onDisconnect={() => { void walletCtx.disconnect(); setModal(null); }} onFunds={() => setModal("funds")} connected={Boolean(walletPk)} pk={walletPk} basketPubkey={snapshot?.basketPubkey ?? null} />}
+      {modal === "history" && <HistoryModal onClose={() => setModal(null)} entries={entries} walletUsdc={balances.usdc} inBasketUsd={basketBal?.inBasketUsd ?? null} onDisconnect={() => { void walletCtx.disconnect(); setModal(null); }} onFunds={() => setModal("funds")} connected={Boolean(walletPk)} pk={walletPk} basketPubkey={snapshot?.basketPubkey ?? null} hasSession={Boolean(session)} reclaiming={reclaiming} onReclaim={() => void reclaimSol()} />}
       {modal === "settings" && <SettingsModal onClose={() => setModal(null)} theme={theme} setTheme={setTheme} chartStyle={chartStyle} setChartStyle={setChartStyle} density={density} setDensity={setDensity} onTour={() => { setModal(null); tour.start(); }} />}
       {modal === "about" && <AboutModal onClose={() => setModal(null)} />}
       <TourOverlay {...tour} />
@@ -1112,7 +1133,7 @@ function histCategory(e: LatencyEntry): "trade" | "funds" | "other" {
   return "other";
 }
 
-function HistoryModal({ onClose, entries, walletUsdc, inBasketUsd, onDisconnect, onFunds, connected, pk, basketPubkey }: { onClose: () => void; entries: LatencyEntry[]; walletUsdc: number | null; inBasketUsd: number | null; onDisconnect: () => void; onFunds: () => void; connected: boolean; pk: string | null; basketPubkey: string | null }) {
+function HistoryModal({ onClose, entries, walletUsdc, inBasketUsd, onDisconnect, onFunds, connected, pk, basketPubkey, hasSession, reclaiming, onReclaim }: { onClose: () => void; entries: LatencyEntry[]; walletUsdc: number | null; inBasketUsd: number | null; onDisconnect: () => void; onFunds: () => void; connected: boolean; pk: string | null; basketPubkey: string | null; hasSession: boolean; reclaiming: boolean; onReclaim: () => void }) {
   const [filter, setFilter] = useState<HistFilter>("all");
   const shown = filter === "all" ? entries : entries.filter((e) => histCategory(e) === filter);
   const FILTERS: { key: HistFilter; label: string }[] = [{ key: "all", label: "All" }, { key: "trade", label: "Trades" }, { key: "funds", label: "Funds" }];
@@ -1123,6 +1144,12 @@ function HistoryModal({ onClose, entries, walletUsdc, inBasketUsd, onDisconnect,
           <div className="row" style={{ justifyContent: "space-between" }}><span className="muted small" style={{ fontWeight: 800 }}>In your wallet</span><span className="num" style={{ fontWeight: 800 }}>${(walletUsdc ?? 0).toFixed(2)}</span></div>
           <div className="row" style={{ justifyContent: "space-between" }}><span className="muted small" style={{ fontWeight: 800 }}>Ready to trade</span><span className="num" style={{ fontWeight: 800 }}>${(inBasketUsd ?? 0).toFixed(2)}</span></div>
           <div className="row" style={{ gap: 8 }}><button className="btn btn--primary" style={{ flex: 1 }} onClick={onFunds}>Add / Withdraw</button><button className="btn btn--ghost" onClick={onDisconnect}>Disconnect</button></div>
+          {hasSession && (
+            <>
+              <button className="btn btn--ghost btn--block" disabled={reclaiming} onClick={onReclaim} title="Close your trading session and refund its rent + leftover SOL top-up to your wallet">{reclaiming ? "Reclaiming…" : "Revoke session & reclaim SOL"}</button>
+              <div className="muted small" style={{ fontWeight: 700, lineHeight: 1.45 }}>Ends your active trading session and refunds its rent + leftover ~0.01 SOL top-up to your wallet. You&apos;ll set up again (one tap) before your next trade.</div>
+            </>
+          )}
         </>
       )}
       {basketPubkey && (
