@@ -373,9 +373,17 @@ function Inner() {
     const tryRegister = () => {
       registerSessionWithExecutor(session)
         .then(() => { if (!dead) setRegistered(true); })
-        .catch(() => { // transient blip (executor restart / network) — back off and retry
+        .catch((e) => {
           if (dead) return;
-          attempt += 1;
+          // 401 = our sign-in token went stale (executor restarted/redeployed and,
+          // pre-stateless-tokens, forgot it). api() already cleared the token; bounce
+          // signInDeclined so the sign-in effect re-signs us in ONCE, then registration
+          // re-runs on the fresh token — no tight retry loop.
+          if (/\b401\b|sign-in required/i.test(String(e instanceof Error ? e.message : e))) {
+            setSignInDeclined(false);
+            return;
+          }
+          attempt += 1; // genuine transient (network) — bounded backoff
           if (attempt < 4) setTimeout(tryRegister, 1500 * attempt);
           else setRegistered(false);
         });

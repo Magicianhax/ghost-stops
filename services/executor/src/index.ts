@@ -6,7 +6,7 @@
 import { Connection, Keypair, PublicKey } from "@solana/web3.js";
 import nacl from "tweetnacl";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { randomBytes } from "node:crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { loadConfig, normalizeRpcUrl } from "./config.ts";
 import { FlashExecutor } from "./flash-exec.ts";
@@ -28,7 +28,30 @@ const AUTH_MAX_AGE_MS = 10 * 60 * 1000; // signed message freshness window
 const TOKEN_TTL_MS = 24 * 3600 * 1000;
 const MAX_SESSION_HOURS = 168; // gum SDK session ceiling (7 days)
 const MAX_EXPIRY_SECS = 30 * 24 * 3600; // cap order expiry at 30 days
-const authTokens = new Map<string, { owner: string; expires: number }>();
+// Auth tokens are STATELESS: an HMAC of {owner, expiry} keyed by the executor's
+// own secret (stable across restarts). This means a redeploy/restart no longer
+// invalidates every signed-in user's token (which caused a 401 + client retry
+// loop). No server-side storage to wipe.
+const AUTH_SECRET = Buffer.from(cfg.executorKeypair.secretKey);
+function makeToken(owner: string, expires: number): string {
+  const payload = Buffer.from(JSON.stringify({ o: owner, e: expires })).toString("base64url");
+  const sig = createHmac("sha256", AUTH_SECRET).update(payload).digest("base64url");
+  return `${payload}.${sig}`;
+}
+function verifyToken(token: string): string | null {
+  const dot = token.indexOf(".");
+  if (dot < 1) return null;
+  const payload = token.slice(0, dot);
+  const sig = token.slice(dot + 1);
+  const expected = createHmac("sha256", AUTH_SECRET).update(payload).digest("base64url");
+  const a = Buffer.from(sig), b = Buffer.from(expected);
+  if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
+  try {
+    const { o, e } = JSON.parse(Buffer.from(payload, "base64url").toString());
+    if (typeof o !== "string" || typeof e !== "number" || e < Date.now()) return null;
+    return o;
+  } catch { return null; }
+}
 const usedSignatures = new Map<string, number>(); // sig hex → expiry, replay guard
 
 /** Parse a base58 pubkey from untrusted input; returns null instead of throwing. */
@@ -58,15 +81,13 @@ function verifySignIn(b: { owner: string; message: string; signature: number[] }
 function authedOwner(req: IncomingMessage): string | null {
   const token = req.headers["x-ghost-auth"];
   if (typeof token !== "string") return null;
-  const entry = authTokens.get(token);
-  if (!entry || entry.expires < Date.now()) return null;
-  return entry.owner;
+  return verifyToken(token);
 }
 
-// purge expired auth tokens + used-signature records so memory stays bounded
+// purge expired used-signature records so memory stays bounded (tokens are
+// stateless now — nothing to sweep there).
 const sweep = setInterval(() => {
   const now = Date.now();
-  for (const [k, v] of authTokens) if (v.expires < now) authTokens.delete(k);
   for (const [k, v] of usedSignatures) if (v < now) usedSignatures.delete(k);
 }, 60_000);
 sweep.unref();
@@ -216,8 +237,7 @@ const server = createServer((req, res) => {
         }
         const fail = verifySignIn(b);
         if (fail) return json(res, 403, { error: fail });
-        const token = randomBytes(24).toString("hex");
-        authTokens.set(token, { owner: b.owner, expires: Date.now() + TOKEN_TTL_MS });
+        const token = makeToken(b.owner, Date.now() + TOKEN_TTL_MS);
         log(`sign-in verified for ${b.owner}`);
         return json(res, 200, { token });
       }
