@@ -9,9 +9,26 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { decodeTransaction } from "flash-v2";
+import { PublicKey } from "@solana/web3.js";
 import { baseConnection, flash } from "./flash";
 import { classifyTxError, submitAndConfirm, type EnableWalletCtx } from "./enable";
 import type { LatencyEntry } from "./hooks";
+
+/** Ground-truth: the wallet's on-chain balance of `tokenMint`, in UI units.
+ *  Used to detect a completed withdrawal directly (funds landed) instead of
+ *  inferring it from an execute-simulation, which is ambiguous once the
+ *  settlement receipt has been consumed. Returns null on RPC hiccup. */
+async function walletTokenUi(owner: string, tokenMint: string): Promise<number | null> {
+  try {
+    const resp = await baseConnection.getParsedTokenAccountsByOwner(new PublicKey(owner), { mint: new PublicKey(tokenMint) });
+    let ui = 0;
+    for (const a of resp.value) {
+      const amt = (a.account.data as { parsed?: { info?: { tokenAmount?: { uiAmount?: number } } } }).parsed?.info?.tokenAmount?.uiAmount;
+      if (typeof amt === "number") ui += amt;
+    }
+    return ui;
+  } catch { return null; }
+}
 
 export interface FundsStep {
   /** "building" → "approve" → "submitting" → "done" | "error" */
@@ -102,19 +119,30 @@ export async function withdrawToken(args: {
 }): Promise<{ ok: boolean; error?: string; executePending?: boolean; signature?: string }> {
   const { wallet, tokenMint, symbol, amount, onStep, onLog } = args;
   const owner = wallet.publicKey.toBase58();
+  // snapshot the wallet balance BEFORE the request — if it rises by ~the amount,
+  // the withdrawal has landed and we can show success directly, regardless of
+  // what the execute-simulation reports.
+  const balanceBefore = await walletTokenUi(owner, tokenMint);
+  let requestSig: string | undefined;
   try {
     onStep({ phase: "building", label: `request withdrawal of ${amount} ${symbol}`, note: "building…" });
     const req = await flash.requestWithdrawal({ owner, tokenMint, amount });
-    await signSubmit(wallet, req.transactionBase64, `request-withdrawal ${amount} ${symbol}`, onStep, onLog);
+    const r = await signSubmit(wallet, req.transactionBase64, `request-withdrawal ${amount} ${symbol}`, onStep, onLog);
+    requestSig = r.signature;
   } catch (e) {
     const c = classifyTxError(e);
     onStep({ phase: "error", label: "request withdrawal", note: c.message });
     return { ok: false, error: c.message };
   }
-  // Settlement crossing: poll UNSIGNED simulations (zero popups) until the
-  // receipt exists on base, then ask for the ONE execute signature.
-  const ready = await waitForSettlementReceipt({ owner, tokenMint, onStep, maxSeconds: 120 });
-  if (!ready) {
+  // Settlement crossing: poll UNSIGNED simulations (zero popups) until either the
+  // receipt is executable OR the funds have already landed in the wallet.
+  const outcome = await waitForSettlement({ owner, tokenMint, amount, balanceBefore, onStep, maxSeconds: 120 });
+  if (outcome === "landed") {
+    // funds already in the wallet — single-step settlement; nothing left to execute.
+    onStep({ phase: "done", label: "withdrawal complete", note: "funds are back in your wallet", signature: requestSig });
+    return { ok: true, signature: requestSig };
+  }
+  if (outcome === "timeout") {
     onStep({
       phase: "error",
       label: "execute withdrawal",
@@ -137,20 +165,35 @@ export async function withdrawUsdc(args: {
 }
 
 /**
- * Poll an UNSIGNED simulation of execute-withdrawal until the settlement
- * receipt exists (no wallet popups while waiting). True = ready to sign.
+ * Wait for a requested withdrawal to resolve, polling two signals (no popups):
+ *  - "landed": the wallet balance rose ~the withdrawn amount → already settled
+ *    (single-step / fast path). This is the fix for the case where the funds
+ *    arrive but the execute-simulation keeps reporting AccountNotInitialized
+ *    (receipt consumed) and the old loop ran to a false timeout.
+ *  - "ready": the execute-withdrawal simulation passes → sign the execute step.
+ *  - "timeout": neither within maxSeconds → caller surfaces "Execute again".
  */
-async function waitForSettlementReceipt(args: {
+async function waitForSettlement(args: {
   owner: string;
   tokenMint: string;
+  amount: string;
+  balanceBefore: number | null;
   onStep: OnStep;
   maxSeconds: number;
-}): Promise<boolean> {
-  const { owner, tokenMint, onStep, maxSeconds } = args;
+}): Promise<"landed" | "ready" | "timeout"> {
+  const { owner, tokenMint, amount, balanceBefore, onStep, maxSeconds } = args;
+  const want = Number(amount);
+  // count it landed once at least half the amount shows up (fees/dust tolerance)
+  const threshold = Number.isFinite(want) && want > 0 ? want * 0.5 : 0;
   const started = Date.now();
   for (;;) {
     const waited = Math.round((Date.now() - started) / 1000);
-    if (waited > maxSeconds) return false;
+    if (waited > maxSeconds) return "timeout";
+    // ground truth: did the money already arrive?
+    if (balanceBefore != null && threshold > 0) {
+      const now = await walletTokenUi(owner, tokenMint);
+      if (now != null && now - balanceBefore >= threshold) return "landed";
+    }
     try {
       const exec = await flash.executeWithdrawal({ owner, tokenMint });
       const tx = decodeTransaction(exec.transactionBase64);
@@ -159,15 +202,15 @@ async function waitForSettlementReceipt(args: {
         replaceRecentBlockhash: true,
       });
       const err = sim.value.err ? JSON.stringify(sim.value.err) + (sim.value.logs ?? []).join(" ") : "";
-      if (!sim.value.err) return true; // receipt landed — execute will pass
-      if (!RE_SETTLEMENT_PENDING.test(err)) return true; // different state — let the real attempt surface it
+      if (!sim.value.err) return "ready"; // receipt landed — execute will pass
+      if (!RE_SETTLEMENT_PENDING.test(err)) return "ready"; // different state — let the real attempt surface it
     } catch { /* builder/RPC hiccup — keep polling */ }
     onStep({
       phase: "submitting",
       label: "settlement crossing from the rollup",
       note: `the rollup writes the receipt to base chain (~30–90s) — waiting ${waited}s, no action needed`,
     });
-    await new Promise((r) => setTimeout(r, 8000));
+    await new Promise((r) => setTimeout(r, 6000));
   }
 }
 
