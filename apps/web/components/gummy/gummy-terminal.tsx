@@ -1047,12 +1047,12 @@ function HistoryModal({ onClose, entries, walletUsdc, inBasketUsd, onDisconnect,
         )}
       </div>
       {entries.length === 0 ? <div className="muted small" style={{ fontWeight: 700 }}>Nothing yet. Every confirmed action lands here with its confirm time and a link to view it on Solana.</div>
-        : shown.length === 0 ? <div className="muted small" style={{ fontWeight: 700 }}>No {filter === "trade" ? "trades" : "fund moves"} this session yet.</div>
+        : shown.length === 0 ? <div className="muted small" style={{ fontWeight: 700 }}>No {filter === "trade" ? "trades" : "fund moves"} yet.</div>
         : shown.map((e) => (
           <div key={e.id} className="hist-row">
             <span className={`hist-dot ${e.chain === "er" ? "hd-good" : "hd-info"}`} />
-            <span className="hist-label">{e.action}</span>
-            <a className="hist-sig" href={explorerLink(e.signature, e.chain === "er" ? FLASH_ER_RPC : null)} target="_blank" rel="noreferrer" title="View on Solana Explorer">{shortKey(e.signature)} ↗</a>
+            <span className="hist-label">{e.action}{e.trade?.market ? ` · ${e.trade.market}` : ""}</span>
+            <a className="hist-sig" href={explorerLink(e.signature, e.chain === "er" ? FLASH_ER_RPC : null)} target="_blank" rel="noreferrer" title="View this transaction on Solana Explorer">{shortKey(e.signature)} ↗</a>
             <span className="hist-time">{e.ms}ms</span>
           </div>
         ))}

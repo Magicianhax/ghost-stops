@@ -552,16 +552,33 @@ export interface LatencyEntry {
   };
 }
 
+const HISTORY_KEY = "gs-history";
+
+/** Activity log — every confirmed trade / fund move, with its signature. Persisted
+ *  to localStorage so the history (and its on-chain explorer links) survives a page
+ *  reload instead of vanishing with the transient success popup. */
 export function useLatencyLog(): {
   entries: LatencyEntry[];
   add: (entry: Omit<LatencyEntry, "id" | "at">) => void;
 } {
   const [entries, setEntries] = useState<LatencyEntry[]>([]);
+  // hydrate after mount (avoids SSR mismatch)
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(HISTORY_KEY);
+      const parsed = raw ? JSON.parse(raw) : null;
+      if (Array.isArray(parsed)) setEntries(parsed.slice(0, 50) as LatencyEntry[]);
+    } catch { /* ignore */ }
+  }, []);
   const add = useCallback((entry: Omit<LatencyEntry, "id" | "at">) => {
     const id = typeof crypto !== "undefined" && "randomUUID" in crypto
       ? crypto.randomUUID()
       : `${Date.now()}-${Math.random()}`;
-    setEntries((prev) => [{ ...entry, id, at: Date.now() }, ...prev].slice(0, 50));
+    setEntries((prev) => {
+      const next = [{ ...entry, id, at: Date.now() }, ...prev].slice(0, 50);
+      try { window.localStorage.setItem(HISTORY_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
   }, []);
   return { entries, add };
 }
