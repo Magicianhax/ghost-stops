@@ -102,9 +102,14 @@ export class OrderClient {
       .transaction();
     await this.sendTo(this.baseConn, delegateTx, false);
 
-    // state propagation base → ER before the crank's first tick
-    await new Promise((r) => setTimeout(r, 3000));
-    await this.scheduleTick(pda.toBase58(), input.feed.toBase58(), orderId, intervalMs, iterations);
+    // wait for the delegated order to actually appear on the ER, then schedule
+    // the crank — retrying if the ER hasn't fully resolved the account yet.
+    await this.waitForErAccount(pda);
+    await this.withRetry(
+      () => this.scheduleTick(pda.toBase58(), input.feed.toBase58(), orderId, intervalMs, iterations),
+      4,
+      /resolve accounts|AccountResolutionsFailed|pending request|not confirmed|Blockhash not found|node is behind/i,
+    );
     return { pda: pda.toBase58(), orderId: orderId.toString() };
   }
 
@@ -148,9 +153,61 @@ export class OrderClient {
     tx.feePayer = this.signer.publicKey;
     tx.recentBlockhash = (await conn.getLatestBlockhash()).blockhash;
     tx.sign(this.signer);
-    const sig = await conn.sendRawTransaction(tx.serialize(), { skipPreflight });
-    await conn.confirmTransaction(sig, "confirmed");
+    const sig = await conn.sendRawTransaction(tx.serialize(), { skipPreflight, maxRetries: 5 });
+    await this.confirmPolling(conn, sig);
     return sig;
+  }
+
+  /** Poll signature status instead of the deprecated blockhash-based
+   *  confirmTransaction — which throws "not confirmed in 30s" under devnet load
+   *  even when the tx actually lands. Longer window + a final history search so a
+   *  slow-but-successful confirmation doesn't surface as a 500. */
+  private async confirmPolling(conn: Connection, sig: string, timeoutMs = 90_000): Promise<void> {
+    const started = Date.now();
+    for (;;) {
+      const elapsed = Date.now() - started;
+      const history = elapsed > 25_000; // once it's taking a while, search history too
+      const st = (await conn.getSignatureStatuses([sig], { searchTransactionHistory: history })).value[0];
+      if (st) {
+        if (st.err) throw new Error(`tx ${sig} failed on-chain: ${JSON.stringify(st.err)}`);
+        if (st.confirmationStatus === "confirmed" || st.confirmationStatus === "finalized") return;
+      }
+      if (elapsed > timeoutMs) {
+        const final = (await conn.getSignatureStatuses([sig], { searchTransactionHistory: true })).value[0];
+        if (final && !final.err) return; // it did land, just slowly
+        throw new Error(`confirmation timeout for ${sig}`);
+      }
+      await new Promise((r) => setTimeout(r, 800));
+    }
+  }
+
+  /** Generic transient-error retry (devnet/ER hiccups: unresolved delegated
+   *  accounts, slow propagation, momentary RPC flakiness). */
+  private async withRetry<T>(fn: () => Promise<T>, attempts: number, retryable: RegExp): Promise<T> {
+    let last: unknown;
+    for (let i = 0; i < attempts; i++) {
+      try { return await fn(); }
+      catch (e) {
+        last = e;
+        const msg = e instanceof Error ? e.message : String(e);
+        if (!retryable.test(msg) || i === attempts - 1) throw e;
+        await new Promise((r) => setTimeout(r, 1500 * (i + 1)));
+      }
+    }
+    throw last;
+  }
+
+  /** Wait for a freshly-delegated account to propagate base → ER before we issue
+   *  an ER instruction against it (replaces a fixed 3s sleep that was too short
+   *  when base devnet is slow, causing AccountResolutionsFailed on schedule_tick). */
+  private async waitForErAccount(pda: PublicKey, timeoutMs = 25_000): Promise<void> {
+    const started = Date.now();
+    for (;;) {
+      const acct = await this.conn.getAccountInfo(pda).catch(() => null);
+      if (acct) return;
+      if (Date.now() - started > timeoutMs) return; // give the ER instruction a shot anyway (it retries)
+      await new Promise((r) => setTimeout(r, 600));
+    }
   }
 
   private send(tx: Transaction, _label: string): Promise<string> {
